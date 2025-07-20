@@ -1,0 +1,480 @@
+enum_relay	string
+LOC_SECT_NAME_1	V� m�n ph�i
+LOC_SECT_NAME_2	Thi�u L�m
+LOC_SECT_NAME_3	V� �ang
+LOC_SECT_NAME_4	Nga My
+LOC_SECT_NAME_5	C�i Bang
+LOC_SECT_NAME_6	���ng M�n
+LOC_SECT_NAME_7	Thi�n Ba Ph�
+LOC_SECT_NAME_8	Ng� ��c Gi�o
+LOC_SECT_NAME_9	Th�y Y�n M�n
+LOC_SECT_NAME_10	C�n L�n Ph�i
+LOC_SECT_NAME_11	Minh gi�o
+LOC_K_WORLD	Th� gi�i
+LOC_K_CITY	Th�nh
+LOC_K_TEAM	T�
+LOC_K_NEARBY	C�n
+LOC_K_FN_NONE	Ch�a
+LOC_K_FN_SHAOLIN	Thi�u L�m
+LOC_K_FN_WUDAN	V� �ang
+LOC_K_FN_EMEI	Nga My
+LOC_K_FN_GAIBANG	C�i Bang
+LOC_K_FN_TANGMEN	���ng M�n
+LOC_K_FN_WUDU	Ng� ��c
+LOC_K_FN_CUIYAN	Th�y Y�n
+LOC_K_FN_KUNLUN	C�n L�n
+LOC_K_FN_TIANBO	Thi�n Ba
+LOC_K_FN_MINGJIAO	Minh gi�o
+LOC_K_MATE_GROUP_NAME	Ph�i ng�u\n
+LOC_K_INFO_BULLETIN	Ch� �
+LOC_K_INFO_SYSTEM	H� th�ng
+LOC_K_PR_FRIEND	
+LOC_K_PR_BROTHER	Th�n nh�n\n
+LOC_K_PR_MATE	Ph�i ng�u\n
+LOC_K_PR_ENEMY	C�u nh�n\n
+LOC_U_RELAY	Relay
+LOC_U_ERROR_ON_SHUTDOWN	L�i ph�t sinh khi ��ng Relay.
+LOC_U_LOAD_AUCTION_FILE_FAIL	��c t�p tin m�-�un b�n ��u gi� th�t b�i!
+LOC_U_INIT_AUCTION_DATA_FAIL	��t n�n m�ng cho d� li�u truy s�t th�t b�i
+LOC_U_FAIL_TO_OPEN_AUCTION_DB	M� kho d� li�u b�n ��u gi� th�t b�i
+LOC_U_FAIL_TO_OPEN_KILLER_DB	M� kho d� li�u nhi�m v� truy s�t th�t b�i
+LOC_U_ERR_IN_KILLDATA_FORMATTODATA	Th� t�c �n ch�a s� c� nguy hi�m, b�o c�o l�i v�i l�p tr�nh vi�n, in KKillerData::FormatToData
+LOC_U_RELAY_ALREADY_RUN	�� c� m�t S3Relay �ang ch�y..
+LOC_U_RELAYGUARD_ALREADY_RUN	Ki�m tra th�y m�t RelayGuard �ang ch�y, ��ng th�i kh�i ��ng Relay r�t nguy hi�m!\n v� th� kh�ng n�n ch�y Relay hi�n t�i!
+LOC_G_AUCTIONSUCCESS	%s mua v�t ph�m theo gi� cao nh�t %d,  phi�n ��u gi� k�t th�c 
+LOC_G_AUCTIONSUCCESSTOWINNER	Ch�c m�ng b�n �� mua v�t ph�m th�nh c�ng!
+LOC_G_AUCTIONSUCCESSTOOWNER	%s mua v�t ph�m theo gi� cao nh�t %d,  xin ��n nh�n ti�n trong th�i gian ch� ��nh 
+LOC_G_AUCTIONSUCCESSTAKEMOENYFAIL	B�n �� kh�ng nh�n ti�n k�p th�i, h� th�ng �� h�y b�
+LOC_G_AUCTIONSUCCESSTAKEITEMFAIL	B�n �� kh�ng nh�n v�t ph�m k�p th�i, h� th�ng �� h�y b�
+LOC_G_AUCTIONCHEATER	%s trong qu� tr�nh ��u gi� �� di d�i v�t ph�m, c� � ��nh l�a ��o
+LOC_G_AUCTIONFAILCONTINUE	K� n�y, v�t ph�m c�a b�n ��u gi� th�t b�i, ���c chuy�n sang ��t sau, %d gi� %d ph�t %d gi�y sau b�t ��u
+LOC_G_AUCTIONFAIL	V�t ph�m c�a b�n ��u gi� th�t b�i, xin nh�n l�i v�t ph�m
+LOC_G_AUCTIONJOINFAIL	Kh�ng th� tham gia v� s� ng��i tham gia ��u gi� �� qu� ��ng.
+LOC_G_AUCTIONJOINFAILNOMONEY	Gi� cao nh�t c�a v�t ph�m hi�n nay l� %d! Ti�n b�n mang theo kh�ng ��, kh�ng th� tham gia!
+LOC_G_AUCTIONJOINSUCCESS	Phi�n ��u gi� b�n tham gia
+LOC_G_AUCTIONJOINSUCCESSTOALL	%s �� gia nh�p l��t ��u gi� v�t ph�m n�y
+LOC_G_AUCTIONBIDDERHIGHEST	Ng��i ra gi� cao nh�t hi�n t�i l� %s, v�i gi� l� %d l��ng.
+LOC_G_AUCATIONQUITFAIL	B�n �� ra gi� cao nh�t, kh�ng th� r�t lui!
+LOC_G_AUCATIONQUITSUCCESS	%s r�t lui kh�i phi�n ��u gi�
+LOC_G_AUCTIONSUCESSGETMONEY	B�n nh�n ���c ti�n ��u gi� v�t ph�m, thu� ph�i tr� l� %d l��ng
+LOC_G_AUCTIONFAILGETITEM	B�n �� nh�n l�i v�t ph�m ��u gi� th�t b�i
+LOC_G_AUCTIONSUBMITSUCCESS	��a v�o th�nh c�ng m�t v�t ph�m ��u gi�, gi� th�p nh�t l� %d, ��n v� t�ng gi� l� %d
+LOC_G_TASKCOUNTLIMIT	Nhi�m v� h� th�ng �� ��y, t�o l�p nhi�m v� truy s�t %s th�t b�i!
+LOC_G_CREATETASKCOUNTLIMIT	H�n ng�ch nhi�m v� �� ��y, t�o l�p nhi�m v� truy s�t %s th�t b�i.
+LOC_G_TAKETASKLINIT	M�i ng��i ch� ���c nh�n nhi�u nh�t %d nhi�m v�, b�n �� nh�n h�t r�i!
+LOC_G_TASKFAILURE	Nhi�m v� truy s�t %s �� k�t th�c, kh�ng c� ai ho�n th�nh nhi�m v�.
+LOC_G_TASKSUCCESS	%s �� ho�n th�nh nhi�m v� truy s�t %s
+LOC_G_TAKEREWARD	Trong v�ng %d gi� %d ph�t %d gi�y h�y nh�n ti�n th��ng v� �� truy s�t %s th�nh c�ng, s� l��ng %d
+LOC_G_TAKEBACKREWARD	Trong v�ng %d gi� %d ph�t %d gi�y h�y nh�n ti�n th��ng ch�a ho�n th�nh nhi�m v� %s, s� l��ng %d
+LOC_G_TAKETASKSUCCESS	B�n �� ti�p nh�n th�nh c�ng nhi�m v� truy s�t %s
+LOC_G_TAKERLIMIT	S� ng��i ti�p nh�n nhi�m v� n�y �� ��t gi�i h�n %d ng��i, kh�ng th� nh�n nhi�m v�.
+LOC_G_TASKNOTEXIST	Nhi�m v� kh�ng c�n t�n t�i
+LOC_G_TAKEMONEY	B�n �� truy s�t ���c %s, nh�n ���c ti�n th��ng %d
+LOC_G_TAKEBACKMONEY	B�n �� nh�n l�i ���c ti�n th��ng truy s�t %s %d
+LOC_G_TAKETASKDUP	B�n �� nh�n nhi�m v� n�y r�i, kh�ng th� ti�p nh�n n�a.
+LOC_G_CREATETASKSUCCESS	B�n t�o l�p th�nh c�ng nhi�m v� truy s�t %s, ti�n th��ng l� %d l��ng
+LOC_G_TASKCANCEL	Nhi�m v� truy s�t %s �� b� h�y b�
+LOC_G_TASKCANNTCANCEL	Nhi�m v� truy s�t %s �� qu� th�i gian h�y b�
+LOC_G_TASKCANCELGETMONEY	Nhi�m v� truy s�t %s �� b� h�y b�, nh�n l�i s� ti�n %d l��ng
+LOC_G_TAKEOWNTASK	Kh�ng th� nh�n nhi�m v� do m�nh t�o l�p
+LOC_G_TAKEKILLSELF	Kh�ng th� nh�n nhi�m v� truy s�t ch�nh m�nh
+LOC_G_TASKNOTACTIVE	Nhi�m v� ch�a ���c k�ch ho�t, xin h�y l�m m�i l�i nhi�m v�
+LOC_G_TASKBEDELETED	�� h�t th�i gian ��i tho�i v�i NPC, nhi�m v� truy s�t %s �� b� h� th�ng h�y b�
+LOC_G_CREATETASKFAIL	T�o l�p nhi�m v� th�t b�i, nh�n l�i chi ph� h� th�ng v� ti�n treo th��ng l� %d l��ng
+LOC_G_TASKBETAKED	%s �� ti�p nh�n nhi�m v� truy s�t %s c�a b�n
+LOC_G_TONG_PASS_TEST	Ch�c m�ng %s �� v��t qua th�i gian th� th�ch!
+LOC_G_TONG_INFO_TO_PASS_TEST	%s �ang trong th�i gian th� th�ch, h�y mau ch�ng thi h�nh nhi�m v�!
+LOC_G_TONG_NOT_PASS_TEST	%s kh�ng v��t qua ���c th�i gian th� th�ch, b� gi�i t�n!
+LOC_G_TONG_MARSHAL	Bang ch�
+LOC_G_TONG_QUEEN	Ph� bang
+LOC_G_TONG_GENERAL	Tr��ng l�o
+LOC_G_TONG_CAPTAIN	���ng ch�
+LOC_G_TONG_SERGEANT	H��ng ch�
+LOC_G_TONG_SOLDIER	Bang ch�ng
+LOC_G_TONG_CHANGE_CAMP	Bang ch� �� thay ��i phe ph�i c�a bang!
+LOC_G_TONG_STORE_MONEY	%s �� c�ng hi�n cho bang h�i %d l��ng!
+LOC_G_TONG_GET_MONEY	%s �� r�t ti�n c�a bang h�i %d
+LOC_G_TONG_UP_LEVEL	��ng c�p bang h�i �� t�ng c�p %d!
+LOC_G_TONG_DOWN_LEVEL	��ng c�p bang h�i gi�m xu�ng c�p %d!
+LOC_G_TONG_CHANGE_LEVEL	��ng c�p bang hi�n t�i l� %d!
+LOC_G_TONG_CREATE_UNION	Bang ch� �� x�y d�ng li�n minh bang h�i %s!
+LOC_G_TONG_DISPATCH_MONEY	Bang ch� ph�t ti�n cho t�t c� bang ch�ng!
+LOC_G_TONG_DISPATCH_MONEY_OL	Bang ch� ph�t ti�n cho bang ch�ng tr�n m�ng!
+LOC_G_TONG_DISPATCH_MONEY_VALUE	Tr��ng l�o nh�n ���c %d, ���ng ch� nh�n ���c %d, H��ng ch� nh�n ���c %d, Bang ch�ng nh�n ���c %d!
+LOC_G_TONG_AUTHORIZE_JOIN	%s ph� chu�n %s gia nh�p bang h�i!
+LOC_G_TONG_APPOINT	%s ���c phong l�m %s!
+LOC_G_TONG_NEW_PERSON_JOIN	Th�ng b�o: Hi�p kh�ch %s �� gia nh�p b�n bang!
+LOC_G_TONG_APPOINT_MARSHAL	%s ���c t�n phong ch�c v� Bang ch�!
+LOC_G_TONG_APPOINT_GENERAL	%s ���c phong l�m Tr��ng l�o!
+LOC_G_TONG_APPOINT_CAPTAIN	%s ���c phong l�m ���ng ch�!
+LOC_G_TONG_APPOINT_SERGEANT	%s ���c phong l�m H��ng ch�!
+LOC_G_TONG_APPOINT_SOLDIER	%s ���c nh�n l�m Bang ch�ng!
+LOC_G_TONG_KICK_MEMBER	%s tr�c xu�t %s kh�i bang h�i!
+LOC_G_TONG_LEAVE	%s �� ph�n b�i b�n bang!
+LOC_G_TONG_CHANGE_MASTER	%s �� chuy�n v� bang ch� cho %s!
+LOC_G_TONG_LEAVE_MSG	%s �� r�i kh�i b�n bang!
+LOC_G_TONG_JOIN_SELFUNION	Bang %s �� gia nh�p Li�n minh %s c�a bang ta!
+LOC_G_TONG_JOIN_UNION	Bang h�i �� gia nh�p Li�n minh bang h�i %s!
+LOC_G_TONG_DISMISS_UNION	Bang ch� �� gi�i t�n Li�n minh bang h�i!
+LOC_G_TONG_KICK_UNION	Bang ch� �� r�t t�n b�n bang kh�i Li�n minh!
+LOC_G_TONG_LEAVE_UNION	B�n bang �� r�t t�n kh�i Li�n minh bang h�i!
+LOC_G_TONG_KICK_UNION_ELSE	Bang ch� �� tr�c xu�t bang h�i %s ra kh�i Li�n minh!
+LOC_G_TONG_LEAVE_UNION_ELSE	Bang h�i %s �� r�i kh�i Li�n minh ch�ng ta!
+LOC_G_RR_ROLE_DEL	Nh�n v�t %s b� x�a b�.
+LOC_G_MP_BETRAY	%s ph�n b�i s� m�n!
+LOC_G_MP_KICKOUT_1	%s tr�c xu�t %s kh�i s� m�n!
+LOC_G_MP_KICKOUT_2	%s tr�c xu�t b�n kh�i s� m�n!
+LOC_G_CITYWAR_NOTIFY_SIGNUP	L�i ��i %s �� b�t ��u cho b�o danh, hoan ng�nh t�t c� c�c bang h�i ��t ��ng c�p %d ��n tham gia b�o danh!
+LOC_G_CITYWAR_NOTIFY_SIGNUP_OK	Bang h�i c�a b�n �� b�o danh th�nh c�ng, xin ��i ��n th�i gian l�i ��i b�t ��u!!
+LOC_G_CITYWAR_NOTIFY_SIGNUP_TOALL	Bang h�i %s �� b�o danh tham gia l�i ��i th�nh %s!!
+LOC_G_CITYWAR_NOTIFY_SIGNUP_LOG	Bang h�i %s �� b�o danh tham gia l�i ��i th�nh %s, t�ng ti�n thi ��u l� %u!!
+LOC_G_CITYWAR_NOTIFY_NO_SIGNUP	Tu�n n�y, l�i ��i th�nh %s kh�ng ai b�o danh, Th�i th� qu� l� v�n s� v� �u.
+LOC_G_CITYWAR_NOTIFY_SINGLE_SIGNUP	L�i ��i th�nh %s ch� c� 1 bang h�i %s b�o danh tham gia,  tr�c ti�p nh�n ���c t� c�ch khi�u chi�n!! 
+LOC_G_CITYWAR_NOTIFY_SIGNUP_COMPLETE	Th�i gian b�o danh l�i ��i th�nh %s �� h�t, t�ng c�ng c� %d bang h�i tham chi�n, l�ch thi ��u �� quy�t, c�c bang h�i h�y ��n tham chi�n ��ng gi� quy ��nh.
+LOC_G_CITYWAR_NOTIFY_ARENA_START	Cu�c thi ��u l�i ��i th�nh %s �� b�t ��u, m�i bang h�i c� t�n trong ��t th� nh�t v�o ��u tr��ng qui ��nh!!
+LOC_G_CITYWAR_NOTIFY_ARENA_RESULT	Bang h�i %s �� ��nh b�i bang h�i %s trong tr�n l�i ��i, gi�nh quy�n �i ti�p v�o l��t tr�n sau!!
+LOC_G_CITYWAR_NOTIFY_ARENA_RESULT2	Bang h�i %s �� ��nh b�i bang h�i %s trong tr�n l�i ��i, ch�nh th�c tr� th�nh bang khi�u chi�n th�nh %s!!
+LOC_G_CITYWAR_NOTIFY_WAR_STARTED	��i chi�n th�nh %s �� ch�nh th�c b�t ��u, bang %s v� bang %s l�p t�c giao chi�n!!
+LOC_G_CITYWAR_NOTIFY_WAR_RESULT	��i chi�n th�nh %s th�ng thua �� quy�t, bang %s tr� th�nh ch� th�nh m�i!! Th�i Th�: %s
+LOC_G_CITYWAR_NOTIFY_WAR_RESULT2	��i chi�n th�nh %s th�ng thua �� quy�t, bang %s ti�p t�c gi� quy�n th�ng tr�!! Th�i th�: %s
+LOC_G_CITYWAR_NOTIFY_WAR_RESULT3	Th�nh %s hi�n v�n ch�a c� Th�i th�, bang %s ch�nh th�c ���c c�ng nh�n quy�n th�ng tr� th�nh trong ��t th� 1!!
+LOC_G_CITYWAR_NOTIFY_TAX_SET	B�n �� thi�t l�p th�nh c�ng thu� su�t v� ch� s� v�t gi� tu�n n�y cho th�nh %s.
+LOC_G_CITYWAR_NOTIFY_SIGNUP_OUT	Kh�ng �� ng�n l��ng, b�o danh l�i ��i th�nh %s th�t b�i!!
+LOC_G_CITYWAR_NOTIFY_SIGNUP_OUT2	Ti�n ��u th�u %d l��ng ���c tr� v� cho ng�n qu� bang,  xin h�y nh�n l�y. 
+LOC_G_CITYWAR_NOTIFY_CHANGE_CITYMASTER	Bang ch� bang %s �� truy�n l�i ng�i v�, th�nh %s �� c� Th�i th� m�i: %s
+LOC_G_CITYWAR_WARNING_ARENACANCELED	M�a b�o s�p k�o ��n, tr�n thi ��u l�i ��i �� b� h�y b�!!
+LOC_G_CITYWAR_WARNING_WARRESET	Tr�n l�i ��i m�i c�a th�nh %s �� b�t ��u b�o danh!!
+LOC_G_CITYWAR_WARNING_SIGNUPTIMEOUT	Th�t ��ng ti�c, th�i gian b�o danh �� k�t th�c.
+LOC_G_CITYWAR_WARNING_ALREADYSIGNUP	Bang h�i c�a b�n �� b�o danh r�i!
+LOC_G_CITYWAR_WARNING_SIGNUPFULL	S� l��ng bang h�i ��ng k� tu�n n�y �� ��. Tu�n sau h�y quay l�i nh�!
+LOC_G_CITYWAR_WARNING_NOTENOUGHFEE	Kh�ng ���c r�i, qu� bang v�n ch�a n�p �� ph� b�o danh %d l��ng.
+LOC_G_CITYWAR_WARNING_LEVELLOW	Kh�ng ���c r�i, qu� bang ch�a ��t c�p %d.
+LOC_G_CITYWAR_WARNING_NOTTONGLEADER_	B�n kh�ng ph�i bang ch�!
+LOC_G_CITYWAR_WARNING_TONGERROR	Bang h�i v� hi�u!!
+LOC_G_CITYWAR_WARNING_TAXALREADYSET_	B�n �� thi�t l�p thu� cho tu�n n�y!
+LOC_G_CITYWAR_WARNING_BECHALLENGER	B�n nh�n ���c mi�n chi�n b�i th�nh %s!!
+LOC_G_CITYWAR_WARNING_BECITYOWNER	Bang h�i c�a b�n �� tr� th�nh bang th�ng tr� th�nh %s!!
+LOC_G_CITYWAR_WARNING_TOOFEWCROWS	Th�t ��ng ti�c, nh�n s� bang h�i b�n kh�ng �� %d ng��i, kh�ng �� t� c�ch tham gia.
+LOC_G_CITYWAR_WARNING_TESTINGPERIOD	Th�t ��ng ti�c, bang h�i c�a b�n �ang trong th�i gian th� th�ch, kh�ng ���c ph�p tham gia.
+LOC_G_CITYWAR_WARNING_SAMECAMP	Bang h�i c�a b�n v� bang th�ng tr� th�nh %s l� %s c�ng m�t phe ph�i!!
+LOC_G_CITYWAR_WARNING_NOTUNIONLEADER	Bang h�i c�a b�n v� c�c bang h�i kh�c �� th�nh l�p li�n minh, nh�ng ch� c� bang ch� m�i c� quy�n c�ng th�nh!!
+LOC_G_CITYWAR_WARNING_PERIODNOTMATCH	Giai �o�n tr��c kh�ng ph� h�p, kh�ng ph�i l� %d, m� l� %d.
+LOC_L_AUCTION_WINNNER_QUIT	ID th�nh th� = Kh�ng bi�t - Ng��i ra gi� cao nh�t �� tho�t kh�i tr� ch�i - ��u gi� ID = %d - Ng��i r�t lui = %s
+LOC_L_ADD_AUCTION_ITEM	ID th�nh th� = %d - ��a v�o v�t ph�m - ��u gi� ID = %d - Gi�m gi� = %d - ��n v� ��a v�o = %d - Ng��i ��a v�o = %s
+LOC_L_ADD_AUCTION_ITEM_SUCC	ID th�nh th� = %d - ��u gi� th�nh c�ng - ��u gi� ID = %d - Gi� c� th�nh l�p = %d
+LOC_L_ADD_AUCTION_ITEM_FAIL	ID th�nh th� = %d - ��u gi� th�t b�i - ��u gi� ID = %d
+LOC_L_ADD_AUCTION_ITEM_ING	ID th�nh th� = %d - B�t ��u ��u gi� - ��u gi� ID = %d
+LOC_L_ADD_TO_AUCTION	ID th�nh th� = %d - Gia nh�p ��u gi� - ��u gi� ID = %d Ng��i tham gia = %s
+LOC_L_AUCTION_ADD_PRICE	ID th�nh th� = %d - Ra gi� - ��u gi� ID = %d - Ng��i ra gi� = %s - Gi� l�n tr��c =%d - C�p s� t�ng gi� = %d
+LOC_L_CW_SIGNUP	Bang h�i tham gia ��u gi�: 
+LOC_L_CW_KICKOUT_TONG	Bang h�i r�i kh�i s�n ��u gi�: 
+LOC_L_START_ARENA_ERROR	�i�u ki�n cho cu�c thi l�i ��i (L�ch thi ��u th�nh th� m�c ti�u / cu�c thi l�i ��i l�n tr��c) b� sai s�t...
+LOC_L_ARENA_RESULT_RECORD_ERROR	Arena result record error...
+LOC_L_ARENA_END	Tr�n ��u l�i ��i bang h�i �� k�t th�c.
+LOC_L_START_CITY_WAR_ERROR	StartCityWar error....
+LOC_L_END_CITY_WAR_ERROR	End City War error....
+LOC_L_ILLEGAL_TAX_RATE	illegal tax rates....\n
+LOC_L_SET_TAX_NOT_PERMITTED	set tax not permitted !!!
+LOC_L_KILLER_CREATE_TASK	T�o l�p nhi�m v� - Nhi�m v� ID = %d - Ng��i t�o l�p = %s - Ng��i b� truy s�t = %s - ��t c�c h� th�ng = %d - T�ng th�i gian = %d Ti�n th��ng = %d
+LOC_L_KILLER_ACTIVE_FAILURE	Thay ��i tr�ng th�i - Nhi�m v� ID= %d - T�ng th�i gian = %d - Th�i gian c�n l�i = %d ACTIVE-> FAILURE
+LOC_L_KILLER_ACTIVE_CLOSE	Thay ��i tr�ng th�i - Nhi�m v� ID=%d - T�ng th�i gian = %d - Th�i gian c�n l�i = %d ACTIVE-> CLOSE
+LOC_L_KILLER_CLOSE_FAILURE	Thay ��i tr�ng th�i- Nhi�m v� ID=%d - T�ng th�i gian = %d - Th�i gian c�n l�i = %d CLOSE-> FAILURE
+LOC_L_KILLER_SUCCESS_DELETESIGN	Thay ��i tr�ng th�i SUCCESS/FAILURE-> DELETESIGN- Nhi�m v� ID=%d - T�ng th�i gian = %d - Th�i gian c�n l�i = %d
+LOC_L_KILLER_CANCEL_TASK	H�y b� nhi�m v� - Nhi�m v� ID=%d - Ng��i t�o l�p = %s - Ng��i b� truy s�t = %s - T�ng th�i gian = %d - Th�i gian c�n l�i = %d - Ti�n th��ng = %d - Ng��i h�y b� = =%s - Tr�ng th�i nhi�m v� = %d
+LOC_L_KILLER_GET_TASK	Ti�p nh�n - Nhi�m v� ID=%d - Ng��i ti�p nh�n = %s, 
+LOC_L_KILLER_GET_MONEY	Ti�n nh�n ���c - Nhi�m v� ID=%d - C�ch nh�n ti�n = %d - S� ti�n nh�n ���c (tr��c thu�) = %d
+LOC_L_TONG_MSG	Bang h�i [%s] :%s
+LOC_L_TONG_DISPATCH_MONEY	Bang h�i [%s] ph�t ti�n cho bang ch�ng: Tr��ng l�o %d ng��i; ���ng ch� %d ng��i; H��ng ch� %d ng��i; Bang ch�ng %d ng��i; L�n l��t ph�t cho: %d %d %d %d, T�ng c�ng %d
+LOC_L_TONG_DISPATCH_MONEY_OL	Bang h�i [%s] ph�t ti�n cho bang ch�ng tr�n m�ng: Tr��ng l�o %d ng��i; ���ng ch� %d ng��i; H��ng ch� %d ng��i; Bang ch�ng %d ng��i; L�n l��t ph�t cho: %d %d %d %d , T�ng c�ng %d
+LOC_L_TONG_CREATE_FAIL_NAME_1	T�o l�p bang h�i th�t b�i: V�n �� t�n bang h�i 1
+LOC_L_TONG_CREATE_FAIL_NAME_2	T�o l�p bang h�i th�t b�i: V�n �� t�n bang h�i %s 2: qu� d�i %s
+LOC_L_TONG_CREATE_FAIL_NAME_3	T�o l�p bang h�i th�t b�i: V�n �� t�n bang h�i 3: Bang h�i tr�ng t�n, Bang ch� tr�ng t�n ho�c Li�n minh bang h�i tr�ng t�n %s %s
+LOC_L_TONG_CREATE_FAIL_MEM	T�o l�p bang h�i th�t b�i: L�u d� li�u b� l�i %s %s
+LOC_L_TONG_KICK_MEMBER	Bang h�i tr�c xu�t ng��i: %s tr�c xu�t %s!
+LOC_L_TONG_KICK_MEMBER_CWS	Bang h�i tr�c xu�t ng��i: tr�ng th�i c�ng th�nh chi�n: %d
+LOC_L_TONG_KICK_NOT_ALLOW_IN_CW	Bang h�i tr�c xu�t ng��i: Trong th�i gian l�i ��i ho�c c�ng th�nh chi�n kh�ng th� tr�c xu�t ng��i!
+LOC_L_TONG_TOLOAD_TONG_COUNT	S� l��ng bang h�i mu�n ��a v�o: %d
+LOC_L_TONG_UNFOUND_UNION_HEADER	R�i kh�i li�n minh bang h�i ph�t sinh l�i: t�m kh�ng th�y Bang ch�!!!
+LOC_L_TONG_LONG_0	Bang h�i chi�n l�m cho Bang h�i thay ��i kinh nghi�m: Bang h�i th�ng l�i: %s, bang h�i th�t b�i: %s!
+LOC_L_TONG_LONG_1	��ng c�p tr��c ��y c�a bang h�i chi�n th�ng %d , �i�m kinh nghi�m tr��c ��y c�a bang h�i chi�n th�ng %d;
+LOC_L_TONG_LONG_2	��ng c�p tr��c ��y c�a bang h�i th�t b�i %d , �i�m kinh nghi�m tr��c ��y c�a bang h�i th�t b�i %d;
+LOC_L_TONG_LONG_3	��ng c�p hi�n t�i c�a bang h�i chi�n th�ng %d , �i�m kinh nghi�m hi�n t�i c�a bang h�i chi�n th�ng %d;
+LOC_L_TONG_LONG_4	��ng c�p hi�n t�i c�a bang h�i th�t b�i %d, �i�m kinh nghi�m hi�n t�i c�a bang h�i th�t b�i %d;
+LOC_L_TONG_LONG_5	[Thao t�c GM] T�n phong [%s] l�m Bang ch� bang h�i [%s]!
+LOC_L_TONG_LONG_6	[Thao t�c GM] T�n phong [%s] l�m Bang ch� bang h�i [%s] th�nh c�ng!
+LOC_L_TONG_LONG_7	[Thao t�c GM] Thi�t l�p ��ng c�p bang h�i l� %s !
+LOC_L_TONG_LONG_8	[Thao t�c GM] Thi�t l�p kinh nghi�m bang h�i l� %s !
+LOC_L_TONG_LONG_9	[Thao t�c GM] Thi�t l�p ��ng c�p bang h�i l� %s! Thao t�c th�nh c�ng
+LOC_L_TONG_LONG_10	[Thao t�c GM] Thi�t l�p kinh nghi�m bang h�i l� %s! Thao t�c th�nh c�ng
+LOC_L_TONG_LONG_11	[Thao t�c GM] Thi�t l�p th�i gian nh�p bang c�a th�nh vi�n [%s] trong bang h�i [%s] l� n�m %d th�ng %d ng�y %d!
+LOC_L_TONG_LONG_12	[Thao t�c GM] Thi�t l�p th�i gian nh�p bang c�a th�nh vi�n [%s] trong bang h�i [%s] l� n�m %d th�ng %d ng�y %d! Thao t�c th�nh c�ng!
+LOC_L_TONG_LONG_13	[Thao t�c GM] C��ng ch� gi�i t�n Bang h�i [%s]!
+LOC_L_TONG_LONG_14	[Thao t�c GM] C��ng ch� gi�i t�n Bang h�i [%s]! Thao t�c th�nh c�ng!
+LOC_L_RR_SAVE_FAIL	B�o l�u tin t�c h�o h�u ng��i ch�i ph�t sinh l�i!
+LOC_L_RR_SAVE_FAIL_2	B�o l�u tin t�c h�o h�u ng��i ch�i ph�t sinh l�i: %s
+LOC_L_SCRIPT_0	T�p tin script bao g�m khi %s �� ph�t sinh l�i.
+LOC_L_SCRIPT_1	S� l��ng tham s� ��a v�o script ch� l�nh TaskSetMode kh�ng ��ng!
+LOC_L_SCRIPT_2	S� l��ng tham s� ��a v�o script ch� l�nh TaskSetStartDay kh�ng ��ng!
+LOC_L_TASKCENTRE_0	Th�i gian th�c thi l�n sau: %d!
+LOC_L_TASKCENTRE_1	Th�i gian th�c thi l�n sau: th�ng %d ng�y %d!
+LOC_L_TASKCENTRE_2	File thi�t l�p ��nh gi� nhi�m v� th�t b�i: %s!!!!!!!!
+LOC_L_TASKCENTRE_3	File thi�t l�p ��nh gi� nhi�m v� th�t b�i, v�n �� nghi�m tr�ng!!!!!!!!
+LOC_L_TASKCENTRE_4	Nh�p Settings File c�a nhi�m v� ��nh gi�: %s
+LOC_L_TASKCENTRE_5	S� l��ng nhi�m v� ��nh gi�: %d
+LOC_L_TASKCENTRE_6	Nhi�m v� ��nh gi� %d: %s, S� l�n: %d
+LOC_L_TASKCENTRE_7	H�y b� nhi�m v� ��nh gi�: %s, S� l�n thi�t l�p nhi�m v�: %d  S� l�n �� th�c thi: %d
+LOC_L_TASKCENTRE_8	Th�ng qua ch� l�nh script n�y �� th�m v�o nhi�m v� ��nh gi�: %s
+LOC_L_TASKCENTRE_9	��t n�n m�ng nhi�m v� ��nh gi� th�nh c�ng: %s
+LOC_L_TASKCENTRE_10	��c Settings File %s th�t b�i, xin ki�m tra l�i c� ph�p.
+LOC_L_TASKCENTRE_11	��c Nhi�m v� ��nh gi� th�t b�i: %s, l�i nghi�m tr�ng!!!
+LOC_L_TASKCENTRE_12	H�y b� t�t c� nhi�m v�!
+LOC_L_TASKCENTRE_13	Nh�n ���c th�ng tin t� ch� l�nh script, h�y b� m�t nhi�m v�: %s
+LOC_L_TASKCENTRE_14	Thi�t l�p t�n nhi�m v� ��nh gi�: %s
+LOC_L_TASKCENTRE_15	Thi�t l�p th�i gian nhi�m v� ��nh gi�: %d gi� %d ph�t!
+LOC_L_TASKCENTRE_16	Th�i gian tr��c m�t l�: %d gi� %d ph�t!
+LOC_L_TASKCENTRE_17	H�m nay s� kh�ng th�c thi: �� qu� th�i gian!
+LOC_L_TASKCENTRE_18	Th�i gian th�c thi l�n t�i: %d:%d! %d
+LOC_L_TASKCENTRE_19	Th�i gian th�c thi l�n sau: th�ng %d ng�y %d!
+LOC_L_TASKCENTRE_20	Th�i gian v�n h�nh ��nh gi� nhi�m v� b�o l�i: %d gi� %d ph�t %d gi�y!!!!!!!
+LOC_L_TASKCENTRE_21	Thi�t l�p th�i gian gi�n c�ch nhi�m v� ��nh gi�: %d gi�y m�t l�n!
+LOC_L_TASKCENTRE_22	Ng�y thi�t l�p Nhi�m v� ��nh gi�-th�i gian gi�n c�ch mode th�c thi nhi�u l�n: %d ng�y m�t l�n!
+LOC_L_TASKCENTRE_23	Th�ng thi�t l�p Nhi�m v� ��nh gi�  th�i gian gi�n c�ch mode th�c thi nhi�u l�n: %d th�ng m�t l�n!
+LOC_L_TASKCENTRE_24	S� l�n ��nh gi� nhi�m v�: %d !
+LOC_L_TASKCENTRE_25	Thi�t l�p mode Nhi�m v� ��nh gi�: %d , mode 0: mode ph� th�ng, M�i ng�y v�i l�n; Mode 1: V�i ng�y m�t l�n; Mode 2: v�i th�ng m�t l�n;
+LOC_L_TASKCENTRE_26	Thi�t l�p ng�y th�ng b�t ��u Nhi�m v� ��nh gi� ph�t sinh l�i: Sai tham s� th�ng: th�ng %d
+LOC_L_TASKCENTRE_27	Thi�t l�p ng�y th�ng b�t ��u Nhi�m v� ��nh gi� ph�t sinh l�i: Sai tham s� ng�y: ng�y %d
+LOC_L_TASKCENTRE_28	Thi�t l�p ng�y th�ng b�t ��u Nhi�m v� ��nh gi�: th�ng %d ng�y %d
+LOC_L_TASKCENTRE_29	Th�c thi Nhi�m v� ��nh gi�: %s
+LOC_L_TASKCENTRE_30	Th�c thi script nhi�m v� ph�t sinh l�i! %s
+LOC_L_TASKCENTRE_31	Th�c thi script Nhi�m v� ��nh gi� ph�t sinh l�i: %s!!
+LOC_L_TONGCONNECT_0	Chuy�n v� bang ch�: chuy�n v� cho %s, tr�ng th�i c�ng th�nh chi�n: %d!
+LOC_L_TONGCONNECT_1	Chuy�n v� bang ch�: Khi c�ng th�nh chi�n, kh�a thao t�c chuy�n v�!
+LOC_L_TONGCONNECT_2	Chuy�n v� bang ch�: ti�p nh�n chuy�n v�: %s - !tr�ng th�i c�ng th�nh chi�n: %d!
+LOC_L_TONGCONNECT_4	%s �� h�y quan h� H�o h�u v�i b�n.
+LOC_L_TONGCONNECT_5	%s �� h�y quan h� Phu th� v�i b�n.
+LOC_L_TONGCONNECT_6	%s �� h�y quan h� Th�n nh�n v�i b�n.
+LOC_L_S3RELAY_INIT_ALREADY	C�nh b�o: S3Relay �� ���c kh�i ��ng!
+LOC_L_S3RELAY_INIT_START	S3Relay - b�t ��u kh�i ��ng!
+LOC_L_S3RELAY_INIT_FINISHED	S3Relay - kh�i ��ng ho�n t�t!
+LOC_L_S3RELAY_INIT_FAIL	FAIL: S3Relay kh�i ��ng th�t b�i!
+LOC_L_S3RELAY_LOGIN_FAIL	FAIL: ***M�t m� t�i kho�n kh�ng ��ng!***
+LOC_L_S3RELAY_UNINIT_START	S3Relay - b�t ��u ��ng l�i!
+LOC_L_S3RELAY_UNINIT_FINISHED	S3Relay - ��ng l�i ho�n t�t!
+LOC_L_S3RELAY_UNINIT_RUNTIMER_FAIL	FAIL - ghi l�i th�i gian v�n h�nh th�t b�i!
+LOC_L_S3RELAY_UNINIT_SHAREDB_FAIL	FAIL: ��ng kho d� li�u ph�t sinh l�i!
+LOC_L_S3RELAY_UNINIT_OFFLINEMSGDB_FAIL	FAIL: ��ng d� li�u tin nh�n r�i m�ng ph�t sinh l�i!
+LOC_L_S3RELAY_DISCONN_RELAY_ROOT	S3Relay: t�ch li�n k�t v�i RelayRoot - 
+LOC_L_S3RELAY_TO_RECONNECT_RELAYROOT	S3Relay: �ang k�t n�i l�i v�i RelayRoot
+LOC_L_S3RELAY_DISCONN_GS_CHAT	S3Relay: t�ch ra kh�i li�n k�t t�n g�u c�a GameSvr 
+LOC_L_S3RELAY_NOTIFY_TO_STOP	Service c�a Relay s� d�ng l�i! \n xin x�c nh�n gateway v� RelayRoot �� b�t ��u kh�i ��ng, \n ��ng th�i ki�m tra l�i t�i kho�n m�t kh�u c� ch�nh x�c hay ch�a.
+LOC_L_S3RELAY_INIT_SCRIPT_FIAIL	FAIL: Kh�i ��ng m�-�un script ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_NC_CHECK_FAIL	FAIL: Ch�a ki�m tra th� m�ng!
+LOC_L_S3RELAY_INIT_HEAVEN_FAIL	FAIL: Kh�i ��ng m� �un Heaven ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_RAINBOW_FAIL	FAIL: Kh�i ��ng m�-�un Rainbow ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_CHNLMGR_FAIL	FAIL: Kh�i ��ng m�-�un k�nh t�n g�u ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_FRIENDMGR_FAIL	FAIL: Kh�i ��ng m�-�un h�o h�u ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_RELAYCENTRE_FAIL	FAIL: Kh�i ��ng RelayCentre ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_ROOTCENTRE_FAIL	FAIL: Kh�i ��ng RootCentre ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_ROOTCLIENT_FAIL	FAIL: Thi�t l�p k�t n�i v�i RootRelay ph�t sinh l�i - 
+LOC_L_S3RELAY_INIT_GATEWAYCENTRE_FAIL	FAIL: Kh�i ��ng m�-�un qu�n l� li�n k�t gateway ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_GATEWAY_FAIL	FAIL: Thi�t l�p li�n k�t v�i gateway ph�t sinh l�i - 
+LOC_L_S3RELAY_INIT_HOSTCENTRE_FAIL	FAIL: Kh�i ��ng m�-�un qu�n l� li�n k�t ��n c�c m�y ch� ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_SHAREDB_FAIL	FAIL: M� kho d� li�u chung ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_OFFLINEMSGDB_FAIL	FAIL: M� kho d� li�u b�o l�u tin nh�n sau khi r�i m�ng ph�t sinh l�i!
+LOC_L_S3RELAY_INIT_MASTER_PRENTICE_FAIL	FAIL: M� kho d� li�u s� �� b�o l�i!
+LOC_L_S3RELAY_INIT_ROLE_DB_FAIL	FAIL: T�o li�n k�t v�i nh�n v�t b�o l�i!
+LOC_L_S3RELAY_INIT_RENAME_DAEMON_FAIL	FAIL: Kh�i ��u d�ch v� ��i t�n b�o l�i!
+LOC_L_S3RELAY_INIT_RENAME_DAEMON_OK	OK:Th�nh c�ng ph�c v� ��i t�n ban ��u
+LOC_L_RELAYSRV_START_FAIL	FAIL: Relay Service - kh�i ��ng th�t b�i!
+LOC_L_HOSTSRV_START_FAIL	FAIL: Service li�n k�t ��n c�c m�y ch� -- Kh�i ��ng th�t b�i!
+LOC_L_CHATSRV_START_FAIL	FAIL: Chat service -Kh�i ��ng th�t b�i!
+LOC_L_TONGSRV_START_FAIL	FAIL: Bang h�i service - Kh�i ��ng th�t b�i!
+LOC_L_TONGSET_INIT_OK	M�-�un bang h�i - ��t n�n m�ng th�nh c�ng
+LOC_L_TONGSET_INIT_FAILED	FAIL: m�-�un bang h�i - ��t n�n m�ng th�t b�i!
+LOC_L_TONGSVR_NEW_CONNECT	Servive bang h�i - thi�t l�p k�t n�i v�i ip:%s
+LOC_L_TONGSVR_CLOSE_CONNECT	Servive bang h�i - ��ng k�t n�i v�i ip:%s
+LOC_L_TONG_CREATE_ONE	Bang h�i- [%s] th�nh l�p [%s] th�nh c�ng.
+LOC_L_TONG_CREATE_ONE_FAIL	FAIL: Bang h�i- [%s] th�nh l�p [%s] th�t b�i.
+LOC_L_TONGDB_STORE_BRIEF_BEGIN	Kho d� li�u bang h�i - b�o l�u tin t�c bang h�i b�t ��u
+LOC_L_TONGDB_STORE_BRIEF_SUCCESS	Kho d� li�u bang h�i - b�o l�u tin t�c bang h�i th�nh c�ng
+LOC_L_TONGDB_STORE_BRIEF_FAILED	Kho d� li�u bang h�i - b�o l�u tin t�c bang h�i [%s] th�t b�i!
+LOC_L_TONGDB_STORE_MEMBER_BEGIN	Kho d� li�u bang h�i - b�o l�u tin t�c th�nh vi�n b�t ��u
+LOC_L_TONGDB_STORE_MEMBER_SUCCESS	Kho d� li�u bang h�i - b�o l�u tin t�c th�nh vi�n th�nh c�ng
+LOC_L_TONGDB_STORE_MEMBER_FAILED	Kho d� li�u bang h�i - b�o l�u tin t�c th�nh vi�n  [%s] th�t b�i!
+LOC_L_TONGDB_OPEN_FAILED	FAIL: M� kho d� li�u bang h�i th�t b�i!
+LOC_L_TONGDB_FLUSH_SUCCESS	Kho d� li�u bang h�i - Refresh th�nh c�ng.
+LOC_L_TONGDB_FLUSH_FAILED	Kho d� li�u bang h�i - Refresh th�t b�i.
+LOC_L_TONGDB_BACKUP_BEING	Kho d� li�u bang h�i - B�t ��u qu� tr�nh backup...
+LOC_L_TONGDB_BACKUP_FAILED	Kho d� li�u bang h�i_Backup_Ph�t sinh l�i!
+LOC_L_TONGDB_BACKUP_SUCCESS	Kho d� li�u bang h�i_Backup_Th�nh c�ng.
+LOC_L_TONGDB_BACKUP_OPEN_ORIG_FAIL	Kho d� li�u bang h�i_Backup_M� kho d� li�u tr��c ��y th�t b�i!
+LOC_L_TONGDB_BACKUP_OPEN_BK_FAIL	Kho d� li�u bang h�i_Backup_Thi�t l�p kho backup th�t b�i!
+LOC_L_TONGDB_BACKUP_ACCE_TONG_FAIL	Kho d� li�u bang h�i_Backup_Mu�n d� x�t tin t�c tr��c �� c�a bang h�i th�t b�i!
+LOC_L_TONGDB_BACKUP_COPY_TONG_FAIL	Kho d� li�u bang h�i_Backup_Ph�c h�i d� li�u bang h�i [%s] ph�t sinh l�i!
+LOC_L_TONGDB_BACKUP_ERR_TONG	Kho d� li�u bang h�i_Backup_Bang h�i �ang b� l�i [%s] !
+LOC_L_TONGDB_BACKUP_ACCE_MEMB_FAIL	Kho d� li�u bang h�i_Backup_Mu�n t�m kho d� li�u th�nh vi�n c� th�t b�i!
+LOC_L_TONGDB_BACKUP_COPY_MEMB_FAIL	Kho d� li�u bang h�i_Backup_Ph�c h�i th�nh vi�n bang h�i [%s] ph�t sinh l�i!
+LOC_L_TONGDB_BACKUP_ERR_MEMB	Kho d� li�u bang h�i_Backup_Th�nh vi�n bang h�i [%s] �ang b� l�i!
+LOC_L_PR_ERROR_RELATION_RECORD	Quan h� ng��i ch�i_L�i ph�t sinh khi �ang t�i d� li�u [%s].
+LOC_L_PR_NOT_ON_LINE_WHEN_ADD_RELA	Quan h� ng��i ch�i_[%s] v� [%s] thi�t l�p quan h� [%s], ng��i ��ng tr��c kh�ng tr�n m�ng.
+LOC_L_PR_MATE_NOT_MATCH	Quan h� ng��i ch�i_Quan h� ph�i ng�u c�a [%s] v� [%s] kh�ng ph� h�p.
+LOC_L_HOSTCONNECT_RECV_UNKNOW_PKG	C�nh c�o: Li�n k�t host ti�p nh�n g�i d� li�u kh�ng r� ngu�n g�c (%d).
+LOC_L_BACKUP_FINISHED	Th�c thi backup to�n b� d� li�u �� ho�n t�t m�t c�ch th�nh c�ng.
+LOC_L_BACKUP_FINISHED_FAILED	Th�c thi backup to�n b� ho�n t�t, trong qu� tr�nh backup ph�t sinh l�i!
+LOC_L_NEWTONG_INIT_FAILED	��t n�n m�ng h� th�ng bang h�i m�i th�t b�i! Xin ki�m tra Settings File!
+LOC_L_GM_SYSTEM_RELOAD_SELECT_SCRIPTS	��c l�i Script file t�i n�i ch� ��nh tr�n Server.
+LOC_L_GM_SYSTEM_RELOAD_OPENLIMIT_FILE	��c l�i configuration file m� ch�c n�ng t� Server.
+LOC_L_GM_SYSTEM_RELOAD_VERSION_FILE	B�t ��u t�i l�i file.
+LOC_L_ACC_ROLE_FAC_LEV_MON	T�n t�i kho�n\t T�n nh�n v�t\t M�n ph�i\t ��ng c�p\t Ng�n l��ng\t ti�u ng�n phi�u\t ��i ng�n phi�u\t ti�u ng�n phi�u kh�c th��ng\t ��i ng�n phi�u kh�c th��ng
+LOC_L_RECORDING_PLAYER_10M_MON	�ang log ng��i ch�i c� ng�n l��ng tr�n 1000 v�n
+LOC_L_CRC_ERROR	**L�i CRC** 
+LOC_L_ROLE_DATA_ERROR	**L�i d� li�u nh�n v�t** 
+LOC_L_OUTPUT_END	Xu�t d� li�u ho�n t�t
+LOC_L_DATA_STAT	Th�ng k� d� li�u
+LOC_L_TOTAL_ROLE_COUNT	T�ng s� ng��i:
+LOC_L_ROLE_COUNT	S� ng��i:
+LOC_L_TOTAL_MONEY_COUNT	T�ng s� ti�n:
+LOC_L_TOTAL_LITTLE_YINPIAO_COUNT	T�ng s� ti�u ng�n phi�u c�: 
+LOC_L_TOTAL_BIG_YINPIAO_COUNT	T�ng s� ��i ng�n phi�u c�
+LOC_L_TOTAL_NEW_LITTLE_YINPIAO_COUNT	T�ng s� Ng�n phi�u nh� m�i:
+LOC_L_TOTAL_NEW_BIG_YINPIAO_COUNT	T�ng s� Ng�n phi�u l�n m�i:
+LOC_L_TOTAL_ERROR_LITTLE_YINPIAO_COUNT	T�ng s� Ng�n phi�u nh� d� th��ng:
+LOC_L_TOTAL_ERROR_BIG_YINPIAO_COUNT	T�ng s� Ng�n phi�u l�n d� th��ng:
+LOC_L_MONEY_COUNT	S� ti�n:
+LOC_L_ROLE_DISTRIB_BY_LEV	Ph�n b� c�p �� nh�n v�t
+LOC_L_ROLE_COUNT_BY_LEV	(c�p) S� ng��i:
+LOC_L_ROLE_COUNT_BY_ABNORM_LEV	S� ng��i c�p cao b�t th��ng
+LOC_L_CHECK_ROLE_LIST	, xin h�y ki�m tra l�i trong danh s�ch nh�n v�t c� b� L�i d� li�u nh�n v�t hay kh�ng
+LOC_L_ROLE_SORT_STAT	H�ng:
+LOC_L_ACC	T�i kho�n
+LOC_L_NAME	T�n
+LOC_L_FACTION1	M�n ph�i
+LOC_L_LEVEL	C�p
+LOC_L_MONEY	Ti�n tr�n ng��i
+LOC_L_YINPAO_S	Ti�u phi�u c�
+LOC_L_YINPAO_L	��i phi�u c�
+LOC_L_NEW_YINPAO_S	Ng�n phi�u nh� m�i
+LOC_L_NEW_YINPAO_L	Ng�n phi�u l�n m�i
+LOC_L_YINPAO_S1	Ti�u ng�n phi�u d� th��ng
+LOC_L_YINPAO_L1	��i ng�n phi�u d� th��ng
+LOC_L_EXP	Kinh nghi�m
+LOC_L_NOT_IN_FAC	Ngo�i th�nh
+LOC_L_FACTION	_______________ m�n ph�i
+LOC_L_CAMP	_______________ Phe
+LOC_L_LEV_SORT	 X�p h�ng ��ng c�p
+LOC_L_MONEY_SORT	 X�p h�ng ng�n l��ng
+LOC_L_ROLE_COUNT_IN_FACTION	S� ng��i ch�i c�a c�c m�n ph�i
+LOC_L_MONEY_SORT_MOST	Th� h�ng ph� h� 
+LOC_L_ROLE_RATE_IN_FACTION	 T� l� c�c m�n ph�i m� ng��i ch�i gia nh�p
+LOC_L_LEVEL_SORT_MOST	Th� h�ng ��ng c�p 
+LOC_L_STAT_END	Th�ng k� k�t th�c, th�i gian:
+LOC_L_ERR_IN_STATISTIC	!!!D� li�u b� l�i trong qu� tr�nh th�ng k�!! Trong t�p tin n�y ph�t hi�n d� li�u nh�n v�t b� l�i, l�i kh�ng x�c ��nh.
+LOC_L_DEL_ROLE_FORMAT	*%s* nh�n v�t:%s. ��ng c�p: %i, Th�i gian x�a:%i.%i.%i %i:%i:%i
+LOC_L_TIME	 th�i gian 
+LOC_L_CHR_COUNT	T�ng s� nh�n v�t
+LOC_L_FREEZE_COUNT	S� l�n ��ng b�ng
+LOC_L_LEVEL1	C�p %d
+LOC_K_ERROR	L�i
+LOC_G_FN_BEGINNER	V� m�n ph�i
+LOC_G_FN_SHAOLIN	Thi�u L�m
+LOC_G_FN_WUDAN	V� �ang
+LOC_G_FN_EMEI	Nga My
+LOC_G_FN_GAIBANG	C�i Bang
+LOC_G_FN_TANGMEN	���ng M�n
+LOC_G_FN_TIANBO	Thi�n Ba
+LOC_G_FN_WUDU	Ng� ��c
+LOC_G_FN_KUNLUN	C�n L�n
+LOC_G_FN_MINGJIAO	Minh gi�o
+LOC_G_FN_CUIYAN	Th�y Y�n
+LOC_G_FP_NONE	V� m�n ph�i  
+LOC_G_FP_SHAOLIN	Thi�u L�m ch�a b�i s�
+LOC_G_FP_SHAOLIN_EARTHLY	Thi�u L�m t�c gia  
+LOC_G_FP_SHAOLIN_ZEN_MONK	Thi�u L�m thi�n t�ng  
+LOC_G_FP_SHAOLIN_FIGHT_MONK	Thi�u L�m v� t�ng  
+LOC_G_FP_TANGMEN	���ng M�n ch�a b�i s�
+LOC_G_FP_TANGMEN_NORMAL	���ng M�n ph� th�ng  
+LOC_G_FP_EMEI	Nga My ch�a b�i s�
+LOC_G_FP_EMEI_PRIESTESS	Nga My xu�t gia  
+LOC_G_FP_EMEI_EARTHLY	Nga My t�c gia  
+LOC_G_FP_GAIBANG	C�i Bang ch�a b�i s�
+LOC_G_FP_GAIBANG_CLEAN	C�i Bang T�nh y  
+LOC_G_FP_GAIBANG_DIRTY	C�i Bang � Y  
+LOC_G_FP_WUDANG	V� �ang ch�a b�i s�
+LOC_G_FP_WUDANG_TAOIST	V� �ang ��o gia  
+LOC_G_FP_WUDANG_EARTHLY	V� �ang t�c gia  
+LOC_G_FP_YANGMEN	D��ng M�n ch�a b�i s�
+LOC_G_FP_YANGMEN_SPEAR	D��ng M�n th��ng K�  
+LOC_G_FP_YANGMEN_BOW	D��ng M�n Cung K�  
+LOC_G_FP_WUDU	Ng� ��c ch�a b�i s�
+LOC_G_FP_WUDU_EVIL	Hi�p ��c  
+LOC_G_FP_WUDU_GU	T� ��c  
+LOC_G_FP_KUNLUN	C�n L�n ch�a b�i s�
+LOC_G_FP_KUNLUN_TIANSHI	C�n L�n Thi�n S�  
+LOC_G_FP_MINGJIAO	Minh Gi�o ch�a b�i s�
+LOC_G_FP_MINGJIAO_SHENGZHAN	Minh Gi�o Th�nh Chi�n  
+LOC_G_FP_MINGJIAO_ZHENBING	Minh Gi�o Tr�n Binh  
+LOC_G_FP_MINGJIAO_XUEREN	Minh Gi�o Huy�t Nh�n  
+LOC_G_FP_CUIYAN	Th�y Y�n ch�a b�i s�
+LOC_G_FP_CUIYAN_DANCER	Th�y Y�n V� Ti�n  
+LOC_G_FP_CUIYAN_LINGNV	Th�y Y�n Linh N�  
+LOC_G_LEVEL_DISTRIBUTE	Ph�n b� tr��ng ph�i ��ng c�p
+LOC_G_LOGIN_DISTRIBUTE	Ph�n b� ��ng nh�p
+LOC_G_FIRST_LOGIN_DISTRIBUTE	Ph�n b� ��ng nh�p l�n ��u
+LOC_G_NOT_IN_A_WEEK	Ph�n b� nh�n v�t ��ng 1 th�ng kh�ng ��ng nh�p tr� ch�i.
+LOC_G_NOT_IN_WEEK_TO_MONTH	Ph�n b� nh�n v�t t� 1 tu�n ��n 1 th�ng kh�ng ��ng nh�p tr� ch�i.
+LOC_G_NOT_IN_A_MONTH	Ph�n b� nh�n v�t ��ng 1 tu�n kh�ng ��ng nh�p tr� ch�i.
+LOC_G_NOT_IN_MONTH_LATER	Ph�n b� nh�n v�t 1 th�ng tr� l�n kh�ng ��ng nh�p tr� ch�i.
+LOC_SECT_NAME_1_	V� m�n ph�i
+LOC_SECT_NAME_2_	Thi�u L�m
+LOC_SECT_NAME_3_	V� �ang
+LOC_SECT_NAME_4_	Nga My
+LOC_SECT_NAME_5_	C�i Bang
+LOC_SECT_NAME_6_	���ng M�n
+LOC_SECT_NAME_7_	Thi�n Ba Ph�
+LOC_SECT_NAME_8_	Ng� ��c Gi�o
+LOC_SECT_NAME_9_	C�n L�n Ph�i
+LOC_SECT_NAME_10_	Minh gi�o
+LOC_SECT_NAME_11_	Th�y Y�n M�n
+LOC_ROUTE_NONE_	V� m�n ph�i  
+LOC_ROUTE_SL_	Thi�u L�m ch�a b�i s�
+LOC_ROUTE_SLS_	Thi�u L�m t�c gia  
+LOC_ROUTE_SLC_	Thi�u L�m thi�n t�ng  
+LOC_ROUTE_SLW_	Thi�u L�m v� t�ng  
+LOC_ROUTE_TM_NO_	���ng M�n ch�a b�i s�
+LOC_ROUTE_TM_YES_	���ng M�n ph� th�ng  
+LOC_ROUTE_EM_	Nga My ch�a b�i s�
+LOC_ROUTE_EMF_	Nga My xu�t gia  
+LOC_ROUTE_EMS_	Nga My t�c gia  
+LOC_ROUTE_GB_	C�i Bang ch�a b�i s�
+LOC_ROUTE_GBJ_	C�i Bang T�nh y  
+LOC_ROUTE_GBW_	C�i Bang � Y  
+LOC_ROUTE_WD_	V� �ang ch�a b�i s�
+LOC_ROUTE_WDD_	V� �ang ��o gia  
+LOC_ROUTE_WDS_	V� �ang t�c gia  
+LOC_ROUTE_YM_	D��ng M�n ch�a b�i s�
+LOC_ROUTE_YMQ_	D��ng M�n th��ng K�  
+LOC_ROUTE_YMG_	D��ng M�n Cung K�  
+LOC_ROUTE_WUDU_	Ng� ��c      
+LOC_ROUTE_WUDU_XIE_	Hi�p ��c  
+LOC_ROUTE_WUDU_GU_	T� ��c  
+LOC_ROUTE_KUNLUN_	C�n L�n ch�a b�i s�
+LOC_ROUTE_KUNLUN_TIANSHI_	C�n L�n Thi�n S�  
+LOC_ROUTE_MINGJIAO_	Minh Gi�o ch�a b�i s�
+LOC_ROUTE_MINGJIAO_SHENGZHAN_	Minh Gi�o Th�nh Chi�n  
+LOC_ROUTE_MINGJIAO_ZHENBING_	Minh Gi�o Tr�n Binh  
+LOC_ROUTE_MINGJIAO_XUEREN_	Minh Gi�o Huy�t Nh�n  
+LOC_ROUTE_CUIYAN_	Th�y Y�n ch�a b�i s�
+LOC_ROUTE_CUIYAN_DANCER_	Th�y Y�n V� Ti�n  
+LOC_ROUTE_CUIYAN_LINGNV_	Th�y Y�n Linh N�  
+LOC_ROUTE_TM_REN_	���ng M�n Nh�m Hi�p  
+LOC_ROUTE_KUNLUN_JIANZUN_	C�n L�n Ki�m T�n  
+LOC_GOLDCOIN_TRADE_MAIL_SUCCESSFUL_TEXT	B�n v� %s giao d�ch th�nh c�ng, h�y nh�n v�t ph�m giao d�ch.
+LOC_GOLDCOIN_TRADE_MAIL_UNSUCCESSFUL_TEXT	B�n v� %s giao d�ch th�t b�i, h�y nh�n l�i v�t ph�m �� giao d�ch.
+LOG_GOLDCOIN_TRADE_MAIL_SUBJECT	Giao d�ch ti�n xu th�nh c�ng!
+LOG_GOLDCOIN_TRADE_UNSUCCESSFUL_MAIL_SUBJECT	Giao d�ch ti�n xu th�t b�i!
+LOC_RELAY_A_TREASURE_DESC_BAGUA_ITEM	B� b�t qu�i
+LOC_RELAY_A_TREASURE_DESC_MONEY	Ti�n v� l�m
+LOC_RELAY_A_TREASURE_DESC_BIG_YINGPIAO	��i ng�n phi�u
+LOC_RELAY_A_TREASURE_DESC_SMALL_YINPIAO	ti�u ng�n phi�u
+LOC_RELAY_A_TREASURE_DESC_SCRIPT	K�ch b�n
+LOC_RELAY_A_TREASURE_DESC_GOLDCOIN	Xu

@@ -1,0 +1,32 @@
+{
+  "name": "jx2-paysys-reversed",
+  "version": "1.0.0",
+  "description": "Reverse-engineered JX2 PaySys server implementation based on binary analysis",
+  "main": "paysys-server.js",
+  "scripts": {
+    "start": "node paysys-server.js",
+    "test": "node test-reversed-server.js",
+    "debug": "node --inspect paysys-server.js"
+  },
+  "keywords": [
+    "jx2",
+    "paysys",
+    "game-server",
+    "reverse-engineering",
+    "tcp-server"
+  ],
+  "author": "Reverse Engineering Analysis",
+  "license": "MIT",
+  "dependencies": {
+    "mysql2": "^3.14.2"
+  },
+  "devDependencies": {
+    "crypto": "*",
+    "fs": "*",
+    "net": "*",
+    "path": "*"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
