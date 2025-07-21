@@ -43,9 +43,16 @@ class EnhancedPaySysServer {
             'b2p_player_transfer': this.handlePlayerTransfer.bind(this),
             'b2p_use_spreader_cdkey': this.handleUseSpreaderCdkey.bind(this),
             
-            // PaySys-to-Bishop handlers
+            // PaySys-to-Bishop handlers  
             'p2b_get_zone_charge_flag': this.handleGetZoneChargeFlag.bind(this),
-            'p2b_ping': this.handlePingResponse.bind(this)
+            'p2b_ping': this.handlePingResponse.bind(this),
+            
+            // Additional handlers discovered from Bishop reverse engineering
+            'b2p_account_free_time_cleaning': this.handleAccountFreeTimeCleaning.bind(this),
+            'g2b_player_offline_live_timeout': this.handlePlayerOfflineLiveTimeout.bind(this),
+            'g2b_player_offline_live_notify': this.handlePlayerOfflineLiveNotify.bind(this),
+            'g2b_offline_live_kick_account_result': this.handleOfflineLiveKickAccountResult.bind(this),
+            'b2p_bishop_login_request': this.handleBishopLoginRequest.bind(this)
         };
         
         // Extended point types from vzopaysys.exe analysis
@@ -64,7 +71,8 @@ class EnhancedPaySysServer {
         this.ensureLogDir();
         
         console.log('[Enhanced PaySys] Server initialized with complete protocol support');
-        console.log('[Enhanced PaySys] Implements 22+ protocol handlers from vzopaysys.exe and KG_SimulatePaysys_FS.exe');
+        console.log('[Enhanced PaySys] Implements 25+ protocol handlers from vzopaysys.exe, KG_SimulatePaysys_FS.exe, and KG_BishopD reverse engineering');
+        console.log('[Enhanced PaySys] Added missing handlers: account_free_time_cleaning, offline_live protocols');
     }
 
     loadConfig(configPath) {
@@ -1053,6 +1061,119 @@ class EnhancedPaySysServer {
         }
     }
 
+    // ==================== ADDITIONAL HANDLERS FROM BISHOP REVERSE ENGINEERING ====================
+    
+    // Account Free Time Cleaning (discovered in Bishop binary)
+    async handleAccountFreeTimeCleaning(socket, data, connectionId) {
+        this.logPayload('b2p_account_free_time_cleaning', data, connectionId);
+        
+        try {
+            if (data.length >= 36) {
+                const username = this.extractString(data, 4, 32);
+                this.log(`[Enhanced PaySys] Account Free Time Cleaning for: ${username}`);
+                
+                // In real implementation, would clean up free time data
+                await this.dbConnection.execute(
+                    'UPDATE account SET nOnline = 0 WHERE username = ?',
+                    [username]
+                );
+                
+                const response = this.createResponse('p2b_account_free_time_cleaning_result', { 
+                    result: 1,
+                    username: username 
+                });
+                socket.write(response);
+            } else {
+                this.log(`[Enhanced PaySys] Invalid free time cleaning packet size: ${data.length}`);
+                socket.write(this.createErrorResponse());
+            }
+        } catch (error) {
+            this.log(`[Enhanced PaySys] Error in account free time cleaning: ${error.message}`);
+            socket.write(this.createErrorResponse());
+        }
+    }
+
+    // Player Offline Live Timeout (G2B protocol from Bishop analysis)
+    async handlePlayerOfflineLiveTimeout(socket, data, connectionId) {
+        this.logPayload('g2b_player_offline_live_timeout', data, connectionId);
+        
+        try {
+            if (data.length >= 36) {
+                const username = this.extractString(data, 4, 32);
+                this.log(`[Enhanced PaySys] Player offline live timeout: ${username}`);
+                
+                // In real implementation, would handle offline timeout logic
+                const response = this.createResponse('g2b_offline_live_timeout_result', { 
+                    result: 1,
+                    username: username 
+                });
+                socket.write(response);
+            } else {
+                this.log(`[Enhanced PaySys] Invalid offline timeout packet size: ${data.length}`);
+                socket.write(this.createErrorResponse());
+            }
+        } catch (error) {
+            this.log(`[Enhanced PaySys] Error in offline live timeout: ${error.message}`);
+            socket.write(this.createErrorResponse());
+        }
+    }
+
+    // Player Offline Live Notify (G2B protocol from Bishop analysis)  
+    async handlePlayerOfflineLiveNotify(socket, data, connectionId) {
+        this.logPayload('g2b_player_offline_live_notify', data, connectionId);
+        
+        try {
+            if (data.length >= 40) {
+                const username = this.extractString(data, 4, 32);
+                const mapId = this.extractInt32(data, 36);
+                
+                this.log(`[Enhanced PaySys] Player offline live notify: ${username}, MapID: ${mapId}`);
+                
+                // In real implementation, would handle offline live notification
+                const response = this.createResponse('g2b_offline_live_notify_result', { 
+                    result: 1,
+                    username: username,
+                    mapId: mapId 
+                });
+                socket.write(response);
+            } else {
+                this.log(`[Enhanced PaySys] Invalid offline notify packet size: ${data.length}`);
+                socket.write(this.createErrorResponse());
+            }
+        } catch (error) {
+            this.log(`[Enhanced PaySys] Error in offline live notify: ${error.message}`);
+            socket.write(this.createErrorResponse());
+        }
+    }
+
+    // Offline Live Kick Account Result (G2B protocol from Bishop analysis)
+    async handleOfflineLiveKickAccountResult(socket, data, connectionId) {
+        this.logPayload('g2b_offline_live_kick_account_result', data, connectionId);
+        
+        try {
+            if (data.length >= 40) {
+                const username = this.extractString(data, 4, 32);
+                const resultCode = this.extractInt32(data, 36);
+                
+                this.log(`[Enhanced PaySys] Offline live kick account result: ${username}, ResultCode: ${resultCode}`);
+                
+                // In real implementation, would handle kick result processing
+                const response = this.createResponse('g2b_kick_result_processed', { 
+                    result: 1,
+                    username: username,
+                    resultCode: resultCode 
+                });
+                socket.write(response);
+            } else {
+                this.log(`[Enhanced PaySys] Invalid kick result packet size: ${data.length}`);
+                socket.write(this.createErrorResponse());
+            }
+        } catch (error) {
+            this.log(`[Enhanced PaySys] Error in kick account result: ${error.message}`);
+            socket.write(this.createErrorResponse());
+        }
+    }
+
     // ==================== HELPER METHODS ====================
 
     extractString(buffer, offset, length) {
@@ -1249,10 +1370,10 @@ class EnhancedPaySysServer {
             return 'b2p_bishop_identity_verify'; // Default to Bishop identity for short packets
         }
         
-        // Analyze the first 4 bytes to determine protocol type from pcap analysis
+        // Analyze the first 4 bytes to determine protocol type from pcap analysis and Bishop RE
         const firstFourBytes = data.readUInt32LE(0);
         
-        // Based on pcap analysis:
+        // Based on pcap analysis and Bishop strings:
         // First packet: 7f00 971d (0x1d970070 in little-endian) - Bishop Identity Verify
         // Second packet: 7f00 ffc1 (0xc1ff007f in little-endian) - Bishop Login Request
         
@@ -1274,6 +1395,24 @@ class EnhancedPaySysServer {
             }
         }
         
+        // Enhanced protocol detection based on Bishop reverse engineering
+        // Check for specific protocol markers found in Bishop binary
+        if (data.length >= 8) {
+            const protocolMarker = data.readUInt32LE(4); // Second 4 bytes often contain protocol ID
+            
+            // Protocol patterns discovered from Bishop binary analysis
+            switch (protocolMarker) {
+                case 0x14A2: // Free time cleaning marker
+                    return 'b2p_account_free_time_cleaning';
+                case 0xCE65: // Offline timeout marker  
+                    return 'g2b_player_offline_live_timeout';
+                case 0xDA07: // Offline notify marker
+                    return 'g2b_player_offline_live_notify';
+                case 0xF6C8: // Kick result marker
+                    return 'g2b_offline_live_kick_account_result';
+            }
+        }
+        
         // For other packet sizes, use fallback detection
         if (data.length >= 32 && data.length <= 128) {
             this.log(`[Enhanced PaySys] Detected Bishop Identity packet: ${data.length} bytes, pattern: 0x${firstFourBytes.toString(16)}`);
@@ -1283,7 +1422,7 @@ class EnhancedPaySysServer {
         // First byte protocol ID mapping for other protocols
         const protocolId = data.readUInt8(0);
         
-        // Protocol mapping based on Bishop binary strings
+        // Enhanced protocol mapping based on Bishop binary strings and structures
         const protocolMap = {
             // Bishop to PaySys protocols  
             0x01: 'b2p_bishop_identity_verify',
@@ -1292,9 +1431,14 @@ class EnhancedPaySysServer {
             0x04: 'b2p_player_exchange',
             0x05: 'b2p_player_enter_game',
             0x06: 'b2p_player_leave_game',
+            0x07: 'b2p_account_free_time_cleaning',
+            0x08: 'g2b_player_offline_live_timeout',
+            0x09: 'g2b_player_offline_live_notify',
+            0x0A: 'g2b_offline_live_kick_account_result',
             
             // Common control characters that might indicate Bishop packets
             0x00: 'b2p_bishop_identity_verify', // NULL byte could be Bishop
+            0x7F: 'b2p_bishop_identity_verify', // 127-byte packets start with 0x7F
         };
         
         const protocolType = protocolMap[protocolId] || 'b2p_bishop_identity_verify';

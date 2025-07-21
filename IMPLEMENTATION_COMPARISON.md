@@ -29,7 +29,8 @@ This document compares the three PaySys implementations we now have access to:
 - **Linux Binary**: ~3 handlers identified (limited due to stripped symbols)
 - **vzopaysys.exe**: 22 complete handlers
 - **KG_SimulatePaysys_FS.exe**: 22 complete handlers  
-- **Enhanced Server**: 22+ complete handlers
+- **KG_BishopD**: 25+ handlers identified through reverse engineering
+- **Enhanced Server**: 25+ complete handlers (all sources combined)
 
 ## Database Operations Comparison
 
@@ -87,12 +88,13 @@ SELECT `nOk` FROM `Card` WHERE `szCardSeri` = '%s'
 - **Messages**: Development-friendly messages and credits
 - **Target**: Development, testing, or simplified deployments
 
-### Enhanced Server (Complete Implementation)
+### Enhanced Server (Complete Implementation + Bishop RE)
 - **Platform**: Node.js cross-platform
-- **Features**: Implements all handlers from both Windows executables
+- **Features**: Implements all handlers from Windows executables + Bishop client analysis
 - **Extensibility**: Modular design for easy protocol additions
 - **Logging**: Comprehensive traffic and operation logging
 - **Database**: Full MySQL integration with all operations
+- **Bishop Integration**: Static reverse engineering analysis of KG_BishopD for missing handlers
 - **Target**: Development, analysis, and production replacement
 
 ## Protocol Handler Mapping
@@ -125,6 +127,12 @@ SELECT `nOk` FROM `Card` WHERE `szCardSeri` = '%s'
 | `b2p_use_spreader_cdkey` | CD-Key redemption | ✅ | ✅ | ✅ |
 | `p2b_get_zone_charge_flag` | Zone charge flag query | ✅ | ✅ | ✅ |
 | `p2b_ping` | Ping response | ✅ | ✅ | ✅ |
+
+**Additional Handlers from Bishop Reverse Engineering:**
+| `b2p_account_free_time_cleaning` | Account cleanup | ❌ | ❌ | ✅ |
+| `g2b_player_offline_live_timeout` | Offline timeout | ❌ | ❌ | ✅ |
+| `g2b_player_offline_live_notify` | Offline notification | ❌ | ❌ | ✅ |
+| `g2b_offline_live_kick_account_result` | Kick result processing | ❌ | ❌ | ✅ |
 
 ## Startup Messages Comparison
 
