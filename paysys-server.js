@@ -335,7 +335,7 @@ class EnhancedPaySysServer {
             const loginVerifyPayload = Buffer.allocUnsafe(49); // 49 bytes payload + 4 byte header = 53 bytes total
             loginVerifyPayload.fill(0);
             
-            const loginVerifyPayload = Buffer.allocUnsafe(49); // 49 bytes payload + 4 byte header = 53 bytes total
+            const loginVerifyPayload = Buffer.allocUnsafe(48); // Try 48 bytes payload + 4 byte header = 52 bytes total
             loginVerifyPayload.fill(0);
             
             // KAccountUserReturnVerify structure (reverse engineered):
@@ -348,20 +348,18 @@ class EnhancedPaySysServer {
             loginVerifyPayload.writeUInt32LE(0, 24);       // nFlags
             loginVerifyPayload.writeUInt32LE(0, 28);       // nVIPLevel or similar
             
-            // Additional fields to match expected structure size
+            // Additional fields to match expected structure size (48 bytes total)
             loginVerifyPayload.writeUInt32LE(0, 32);       // Reserved field 1
             loginVerifyPayload.writeUInt32LE(0, 36);       // Reserved field 2  
             loginVerifyPayload.writeUInt32LE(0, 40);       // Reserved field 3
             loginVerifyPayload.writeUInt32LE(0, 44);       // Reserved field 4
-            loginVerifyPayload.writeUInt8(0, 48);          // Final byte
             
             // Create response with 4-byte protocol header + KAccountUserReturnVerify payload
-            const response = Buffer.allocUnsafe(53); // Total size that works from PCAP
+            const response = Buffer.allocUnsafe(52); // Total size: 48 + 4 = 52 bytes
             
             // Protocol header (4 bytes) - matching PCAP format:
-            // First packet (identity verify): 2200 2000 (34 bytes, protocol 0x20)
-            // Second packet (login verify): 3500 9744 (53 bytes, protocol 0x4497)
-            response.writeUInt16LE(53, 0);     // Total packet size: 53 bytes
+            // Try 52 bytes total instead of 53 to see if structure size is different
+            response.writeUInt16LE(52, 0);     // Total packet size: 52 bytes
             response.writeUInt16LE(0x4497, 2); // Protocol type from working PCAP
             
             // Copy payload
@@ -370,7 +368,7 @@ class EnhancedPaySysServer {
             socket.write(response);
             
             this.log(`[Enhanced PaySys] Bishop Login Request - KAccountUserReturnVerify structure sent (${response.length} bytes)`);
-            this.log(`[Enhanced PaySys] Response should match sizeof(tagProtocolHeader) + sizeof(KAccountUserReturnVerify)`);
+            this.log(`[Enhanced PaySys] Testing 52 bytes total (4 header + 48 payload) instead of 53 bytes`);
             
             // Ensure connection remains stable
             socket.setKeepAlive(true, 30000);
