@@ -31,25 +31,19 @@ class SimplePaySysServer {
             configText.split('\n').forEach(line => {
                 line = line.trim();
                 if (line.startsWith('[') && line.endsWith(']')) {
-                    currentSection = line.slice(1, -1).toLowerCase();
-                } else if (line.includes('=')) {
+                    currentSection = line.slice(1, -1);
+                } else if (line.includes('=') && currentSection === 'database') {
                     const [key, value] = line.split('=').map(s => s.trim());
-                    const keyLower = key.toLowerCase();
-                    
-                    if (currentSection === 'database') {
-                        switch (keyLower) {
-                            case 'ip': config.dbHost = value; break;
-                            case 'port': config.dbPort = parseInt(value); break;
-                            case 'username': config.dbUser = value; break;
-                            case 'password': config.dbPassword = value; break;
-                            case 'dbname': config.dbName = value; break;
-                        }
-                    } else if (currentSection === 'paysys') {
-                        switch (keyLower) {
-                            case 'port': config.serverPort = parseInt(value); break;
-                            case 'ip': config.serverIP = value; break;
-                        }
+                    switch (key) {
+                        case 'host': config.dbHost = value; break;
+                        case 'port': config.dbPort = parseInt(value); break;
+                        case 'user': config.dbUser = value; break;
+                        case 'password': config.dbPassword = value; break;
+                        case 'database': config.dbName = value; break;
                     }
+                } else if (line.includes('=') && currentSection === 'server') {
+                    const [key, value] = line.split('=').map(s => s.trim());
+                    if (key === 'port') config.serverPort = parseInt(value);
                 }
             });
             
