@@ -127,11 +127,15 @@ class SimplePaySysServer {
                 const protocol = data.readUInt16LE(2);
                 this.log(`[Simple PaySys] 127-byte Bishop packet, protocol: 0x${protocol.toString(16)}`);
                 
-                // From PCAP: Working response is exactly 53 bytes: 3500 9744 6137 cc16...
-                const response = Buffer.from([
-                    0x35, 0x00,   // Size: 53 bytes
-                    0x97, 0x44,   // Protocol response
-                    // Payload (49 bytes) - exact from working PCAP
+                // Create response with current timestamp for KG_stime
+                const response = Buffer.alloc(53);
+                
+                // Header (4 bytes)
+                response.writeUInt16LE(53, 0);      // Size: 53 bytes
+                response.writeUInt16LE(0x9744, 2);  // Protocol response
+                
+                // Payload (49 bytes) - based on working PCAP structure
+                const payload = Buffer.from([
                     0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4, 
                     0x00, 0xfa, 0x40, 0xa1, 0x99, 0xa1, 
                     0x37, 0x44, 0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4,
@@ -139,10 +143,15 @@ class SimplePaySysServer {
                     0x37, 0x44, 0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4,
                     0x00, 0xfb, 0x40, 0xa1, 0x99, 0x32, 0xca, 0x39, 0xdb
                 ]);
+                payload.copy(response, 4);
+                
+                // Bishop reads timestamp from offset 46 (0x2e) - put current Unix timestamp there
+                const currentTime = Math.floor(Date.now() / 1000);
+                response.writeUInt32LE(currentTime, 46);
                 
                 socket.write(response);
-                this.log(`[Simple PaySys] Sent exact PCAP response: ${response.length} bytes`);
-                this.log(`[Simple PaySys] This should match sizeof(tagProtocolHeader) + sizeof(KAccountUserReturnVerify)`);
+                this.log(`[Simple PaySys] Sent response with current timestamp ${currentTime} at offset 46: ${response.length} bytes`);
+                this.log(`[Simple PaySys] This should allow KG_stime to succeed`);
                 
             } else {
                 this.log(`[Simple PaySys] Unexpected Bishop packet length: ${data.length}`);
