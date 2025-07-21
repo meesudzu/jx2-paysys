@@ -2230,12 +2230,13 @@ class EnhancedPaySysServer {
             
             if (secondBytes === 0x971D) {
                 // Pattern matches first Bishop packet: 7f00 971d
-                this.log(`[Enhanced PaySys] Detected Bishop Identity Verify packet: ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
+                this.log(`[Enhanced PaySys] Detected Bishop Identity Verify packet (first): ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
                 return 'b2p_bishop_identity_verify';
             } else if (secondBytes === 0xFFC1) {
                 // Pattern matches second Bishop packet: 7f00 ffc1 
-                this.log(`[Enhanced PaySys] Detected Bishop Login Request packet: ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
-                return 'b2p_bishop_login_request';
+                // Based on vzopaysys.exe analysis, both packets use same handler: b2p_bishop_identity_verify
+                this.log(`[Enhanced PaySys] Detected Bishop Identity Verify packet (second): ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
+                return 'b2p_bishop_identity_verify';
             } else {
                 // Use connection state to determine packet type for Bishop
                 if (socket && socket.bishopState) {
@@ -2243,8 +2244,8 @@ class EnhancedPaySysServer {
                         this.log(`[Enhanced PaySys] First 127-byte packet - assuming Identity Verify`);
                         return 'b2p_bishop_identity_verify';
                     } else if (socket.bishopState.identityVerified && !socket.bishopState.loginRequested) {
-                        this.log(`[Enhanced PaySys] Second 127-byte packet - assuming Login Request`);  
-                        return 'b2p_bishop_login_request';
+                        this.log(`[Enhanced PaySys] Second 127-byte packet - assuming Identity Verify`);  
+                        return 'b2p_bishop_identity_verify';
                     }
                 }
                 
