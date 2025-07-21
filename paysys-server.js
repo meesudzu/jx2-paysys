@@ -2234,9 +2234,9 @@ class EnhancedPaySysServer {
                 return 'b2p_bishop_identity_verify';
             } else if (secondBytes === 0xFFC1) {
                 // Pattern matches second Bishop packet: 7f00 ffc1 
-                // Based on vzopaysys.exe analysis, both packets use same handler: b2p_bishop_identity_verify
-                this.log(`[Enhanced PaySys] Detected Bishop Identity Verify packet (second): ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
-                return 'b2p_bishop_identity_verify';
+                // Based on error analysis, this is actually a login request, not identity verify
+                this.log(`[Enhanced PaySys] Detected Bishop Login Request packet (second): ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
+                return 'b2p_bishop_login_request';
             } else {
                 // Use connection state to determine packet type for Bishop
                 if (socket && socket.bishopState) {
