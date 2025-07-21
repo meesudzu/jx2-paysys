@@ -320,28 +320,54 @@ class EnhancedPaySysServer {
         try {
             this.log(`[Enhanced PaySys] Bishop Login Request - Processing second authentication packet`);
             
-            // This is the second 127-byte packet Bishop sends after identity verification
-            // Pattern: 7f00 ffc1... 
-            // Based on Bishop log "Recv Verify Information From PaySys nRetCode = -1"
-            // Bishop is expecting to RECEIVE verification information, not just get a response
+            // Bishop expects a specific response structure for KAccountUserReturnVerify
+            // The error message indicates Bishop expects: sizeof(tagProtocolHeader) + sizeof(KAccountUserReturnVerify)
+            // From analysis, KAccountUserReturnVerify likely contains login result data
             
-            // The key insight is that Bishop calls something like "Recv Verify Information From PaySys"
-            // This suggests PaySys should proactively SEND verification information to Bishop
+            // Based on Bishop's buffer size check error, we need to send exactly the right size
+            // The structure appears to be:
+            // - tagProtocolHeader (likely 4 bytes)
+            // - KAccountUserReturnVerify (variable size, need to match Bishop's expectation)
             
-            // Let's send a verification information packet similar to the identity response
-            const verificationPayload = Buffer.from([
-                // Similar pattern to the first response but possibly different
-                0x01, 0x00, 0x00, 0x00, // Success/verification code
-                0x00, 0x00, 0x00, 0x00, // Session or connection info
-                // Additional verification data if needed
-                0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00
-            ]);
+            // From the working PCAP, Bishop receives different response sizes at different stages
+            // For login verification, let's create a proper KAccountUserReturnVerify structure
             
-            const response = this.createResponse(0, verificationPayload);
+            const loginVerifyPayload = Buffer.allocUnsafe(49); // 49 bytes payload + 4 byte header = 53 bytes total
+            loginVerifyPayload.fill(0);
+            
+            // KAccountUserReturnVerify structure (reverse engineered):
+            loginVerifyPayload.writeUInt32LE(1, 0);        // nRetCode = 1 (success)
+            loginVerifyPayload.writeUInt32LE(0, 4);        // nAccountID  
+            loginVerifyPayload.writeUInt32LE(0, 8);        // nExpTime (expiration time)
+            loginVerifyPayload.writeUInt32LE(0, 12);       // nOnlineTime
+            loginVerifyPayload.writeUInt32LE(0, 16);       // nLastLoginTime
+            loginVerifyPayload.writeUInt32LE(0, 20);       // nPoints/nCoin
+            loginVerifyPayload.writeUInt32LE(0, 24);       // nFlags
+            loginVerifyPayload.writeUInt32LE(0, 28);       // nVIPLevel or similar
+            
+            // Additional fields to match expected structure size
+            loginVerifyPayload.writeUInt32LE(0, 32);       // Reserved field 1
+            loginVerifyPayload.writeUInt32LE(0, 36);       // Reserved field 2  
+            loginVerifyPayload.writeUInt32LE(0, 40);       // Reserved field 3
+            loginVerifyPayload.writeUInt32LE(0, 44);       // Reserved field 4
+            loginVerifyPayload.writeUInt8(0, 48);          // Final byte
+            
+            // Create response with 4-byte protocol header + KAccountUserReturnVerify payload
+            const response = Buffer.allocUnsafe(53); // Total size that works from PCAP
+            
+            // Protocol header (4 bytes)
+            response.writeUInt8(49, 0);  // Payload length (49 bytes)
+            response.writeUInt8(0x00, 1); // Protocol flags
+            response.writeUInt8(0x00, 2); // Additional flags
+            response.writeUInt8(0x00, 3); // Reserved
+            
+            // Copy payload
+            loginVerifyPayload.copy(response, 4);
+            
             socket.write(response);
             
-            this.log(`[Enhanced PaySys] Bishop Login Request - Verification information sent to Bishop`);
+            this.log(`[Enhanced PaySys] Bishop Login Request - KAccountUserReturnVerify structure sent (${response.length} bytes)`);
+            this.log(`[Enhanced PaySys] Response should match sizeof(tagProtocolHeader) + sizeof(KAccountUserReturnVerify)`);
             
             // Ensure connection remains stable
             socket.setKeepAlive(true, 30000);
@@ -2062,6 +2088,13 @@ class EnhancedPaySysServer {
             const connectionId = ++this.connectionId;
             this.connections.set(connectionId, socket);
             
+            // Track connection state for Bishop protocol handling
+            socket.bishopState = {
+                identityVerified: false,
+                loginRequested: false,
+                packetsReceived: 0
+            };
+            
             this.log(`[Enhanced PaySys] New connection ${connectionId} from ${socket.remoteAddress}:${socket.remotePort}`);
             
             // Set socket options to prevent premature connection drops
@@ -2115,15 +2148,25 @@ class EnhancedPaySysServer {
                 return;
             }
             
+            // Update connection state
+            socket.bishopState.packetsReceived++;
+            
             // Log raw packet data for analysis
-            this.log(`[Enhanced PaySys] Connection ${connectionId} received ${data.length} bytes`);
+            this.log(`[Enhanced PaySys] Connection ${connectionId} received ${data.length} bytes (packet #${socket.bishopState.packetsReceived})`);
             this.logPayload('raw_packet', data, connectionId);
             
-            const protocolType = this.detectProtocolType(data);
+            const protocolType = this.detectProtocolType(data, socket);
             this.log(`[Enhanced PaySys] Handling protocol: ${protocolType}`);
             
             if (this.PROTOCOL_HANDLERS[protocolType]) {
                 await this.PROTOCOL_HANDLERS[protocolType](socket, data, connectionId);
+                
+                // Update connection state based on handled protocol
+                if (protocolType === 'b2p_bishop_identity_verify') {
+                    socket.bishopState.identityVerified = true;
+                } else if (protocolType === 'b2p_bishop_login_request') {
+                    socket.bishopState.loginRequested = true;
+                }
             } else {
                 this.log(`[Enhanced PaySys] Unknown protocol type: ${protocolType}`);
                 
@@ -2162,7 +2205,7 @@ class EnhancedPaySysServer {
         }
     }
 
-    detectProtocolType(data) {
+    detectProtocolType(data, socket = null) {
         // Parse the actual binary protocol header
         if (data.length < 4) {
             return 'b2p_bishop_identity_verify'; // Default to Bishop identity for short packets
@@ -2177,19 +2220,48 @@ class EnhancedPaySysServer {
         
         if (data.length === 127) {
             const pattern = data.readUInt32LE(0);
+            const secondBytes = data.readUInt16LE(2);
             
-            if ((pattern & 0xFFFF0000) === 0x1D970000) {
+            this.log(`[Enhanced PaySys] 127-byte packet analysis: pattern=0x${pattern.toString(16)}, secondBytes=0x${secondBytes.toString(16)}`);
+            
+            // From PCAP analysis:
+            // First packet: 7f00 971d... -> should be identity verify
+            // Second packet: 7f00 ffc1... -> should be login request  
+            
+            if (secondBytes === 0x971D) {
                 // Pattern matches first Bishop packet: 7f00 971d
                 this.log(`[Enhanced PaySys] Detected Bishop Identity Verify packet: ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
                 return 'b2p_bishop_identity_verify';
-            } else if ((pattern & 0xFFFF0000) === 0xFFC10000) {
+            } else if (secondBytes === 0xFFC1) {
                 // Pattern matches second Bishop packet: 7f00 ffc1 
                 this.log(`[Enhanced PaySys] Detected Bishop Login Request packet: ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
                 return 'b2p_bishop_login_request';
             } else {
-                // Default to Bishop identity for 127-byte packets
-                this.log(`[Enhanced PaySys] Detected Bishop Identity packet (generic): ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
-                return 'b2p_bishop_identity_verify';
+                // Use connection state to determine packet type for Bishop
+                if (socket && socket.bishopState) {
+                    if (!socket.bishopState.identityVerified && socket.bishopState.packetsReceived === 1) {
+                        this.log(`[Enhanced PaySys] First 127-byte packet - assuming Identity Verify`);
+                        return 'b2p_bishop_identity_verify';
+                    } else if (socket.bishopState.identityVerified && !socket.bishopState.loginRequested) {
+                        this.log(`[Enhanced PaySys] Second 127-byte packet - assuming Login Request`);  
+                        return 'b2p_bishop_login_request';
+                    }
+                }
+                
+                // Check full first 4 bytes for other patterns
+                const fullPattern = data.readUInt32LE(0);
+                if ((fullPattern & 0xFFFF) === 0x007F) {
+                    // All 127-byte packets starting with 7f00 are Bishop packets
+                    // Use connection state to determine type
+                    this.log(`[Enhanced PaySys] 127-byte Bishop packet with pattern 0x${fullPattern.toString(16)}`);
+                    
+                    // For now, default to identity verify for unknown patterns
+                    return 'b2p_bishop_identity_verify';
+                } else {
+                    // Default to Bishop identity for other 127-byte packets
+                    this.log(`[Enhanced PaySys] Generic Bishop Identity packet: ${data.length} bytes, pattern: 0x${pattern.toString(16)}`);
+                    return 'b2p_bishop_identity_verify';
+                }
             }
         }
         
