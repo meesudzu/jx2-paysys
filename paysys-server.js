@@ -335,6 +335,9 @@ class EnhancedPaySysServer {
             const loginVerifyPayload = Buffer.allocUnsafe(49); // 49 bytes payload + 4 byte header = 53 bytes total
             loginVerifyPayload.fill(0);
             
+            const loginVerifyPayload = Buffer.allocUnsafe(49); // 49 bytes payload + 4 byte header = 53 bytes total
+            loginVerifyPayload.fill(0);
+            
             // KAccountUserReturnVerify structure (reverse engineered):
             loginVerifyPayload.writeUInt32LE(1, 0);        // nRetCode = 1 (success)
             loginVerifyPayload.writeUInt32LE(0, 4);        // nAccountID  
@@ -355,11 +358,11 @@ class EnhancedPaySysServer {
             // Create response with 4-byte protocol header + KAccountUserReturnVerify payload
             const response = Buffer.allocUnsafe(53); // Total size that works from PCAP
             
-            // Protocol header (4 bytes)
-            response.writeUInt8(49, 0);  // Payload length (49 bytes)
-            response.writeUInt8(0x00, 1); // Protocol flags
-            response.writeUInt8(0x00, 2); // Additional flags
-            response.writeUInt8(0x00, 3); // Reserved
+            // Protocol header (4 bytes) - matching PCAP format:
+            // First packet (identity verify): 2200 2000 (34 bytes, protocol 0x20)
+            // Second packet (login verify): 3500 9744 (53 bytes, protocol 0x4497)
+            response.writeUInt16LE(53, 0);     // Total packet size: 53 bytes
+            response.writeUInt16LE(0x4497, 2); // Protocol type from working PCAP
             
             // Copy payload
             loginVerifyPayload.copy(response, 4);
