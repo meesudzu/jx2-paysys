@@ -110,6 +110,85 @@ class SimplePaySysServer {
         }
     }
 
+    // Extract null-terminated string from buffer
+    extractString(buffer, offset, maxLength) {
+        const end = Math.min(offset + maxLength, buffer.length);
+        let str = '';
+        for (let i = offset; i < end; i++) {
+            if (buffer[i] === 0) break;
+            str += String.fromCharCode(buffer[i]);
+        }
+        return str;
+    }
+
+    // Handle player identity verification (Protocol 62, 227 bytes)
+    async handlePlayerIdentityVerify(socket, data, connectionId) {
+        try {
+            this.log(`[Simple PaySys] Player identity verification: ${data.length} bytes`);
+            this.log(`[Simple PaySys] First 8 bytes: ${data.subarray(0, 8).toString('hex')}`);
+            
+            if (data.length >= 72) {
+                const username = this.extractString(data, 4, 32);
+                const password = this.extractString(data, 36, 32);
+                
+                this.log(`[Simple PaySys] Player login attempt: ${username}`);
+                
+                if (this.dbConnection) {
+                    // Query account from database
+                    const [rows] = await this.dbConnection.execute(
+                        'SELECT username, password FROM account WHERE username = ?',
+                        [username]
+                    );
+                    
+                    if (rows.length > 0 && rows[0].password === password) {
+                        this.log(`[Simple PaySys] Player login successful: ${username}`);
+                        
+                        // Create success response - Bishop expects specific format
+                        const response = Buffer.alloc(64);
+                        response.writeUInt16LE(64, 0);       // Size: 64 bytes
+                        response.writeUInt16LE(0x3F, 2);     // Response protocol for player verify
+                        response.writeUInt32LE(1, 4);        // Success code
+                        response.write(username, 8, 32, 'utf8'); // Echo username back
+                        
+                        socket.write(response);
+                        this.log(`[Simple PaySys] Sent player verify success response: ${response.length} bytes`);
+                        
+                    } else {
+                        this.log(`[Simple PaySys] Player login failed: ${username}`);
+                        
+                        // Create failure response
+                        const response = Buffer.alloc(64);
+                        response.writeUInt16LE(64, 0);       // Size: 64 bytes
+                        response.writeUInt16LE(0x3F, 2);     // Response protocol for player verify
+                        response.writeUInt32LE(0, 4);        // Failure code
+                        response.write(username, 8, 32, 'utf8'); // Echo username back
+                        
+                        socket.write(response);
+                        this.log(`[Simple PaySys] Sent player verify failure response: ${response.length} bytes`);
+                    }
+                } else {
+                    // No database connection - allow login for testing
+                    this.log(`[Simple PaySys] No database - allowing player login: ${username}`);
+                    
+                    const response = Buffer.alloc(64);
+                    response.writeUInt16LE(64, 0);       // Size: 64 bytes
+                    response.writeUInt16LE(0x3F, 2);     // Response protocol for player verify
+                    response.writeUInt32LE(1, 4);        // Success code
+                    response.write(username, 8, 32, 'utf8'); // Echo username back
+                    
+                    socket.write(response);
+                    this.log(`[Simple PaySys] Sent player verify success response (no DB): ${response.length} bytes`);
+                }
+                
+            } else {
+                this.log(`[Simple PaySys] Invalid player identity packet size: ${data.length}`);
+            }
+            
+        } catch (error) {
+            this.log(`[Simple PaySys] Error in player identity verify: ${error.message}`);
+        }
+    }
+
     // Handle Bishop packets - exactly like original Linux paysys
     handleBishopPacket(socket, data, connectionId) {
         try {
@@ -136,7 +215,11 @@ class SimplePaySysServer {
                 
                 socket.write(response);
                 this.log(`[Simple PaySys] Sent exact PCAP response: ${response.length} bytes`);
-                this.log(`[Simple PaySys] This should match sizeof(tagProtocolHeader) + sizeof(KAccountUserReturnVerify)`);
+                this.log(`[Simple PaySys] Response matches working PCAP capture exactly - should pass all Bishop checks`);
+                
+            } else if (data.length === 227) {
+                // This is likely a player identity verification request (Protocol 62)
+                this.handlePlayerIdentityVerify(socket, data, connectionId);
                 
             } else {
                 this.log(`[Simple PaySys] Unexpected Bishop packet length: ${data.length}`);
