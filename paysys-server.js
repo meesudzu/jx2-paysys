@@ -127,15 +127,10 @@ class SimplePaySysServer {
                 const protocol = data.readUInt16LE(2);
                 this.log(`[Simple PaySys] 127-byte Bishop packet, protocol: 0x${protocol.toString(16)}`);
                 
-                // Create response with current timestamp for KG_stime
-                const response = Buffer.alloc(53);
-                
-                // Header (4 bytes)
-                response.writeUInt16LE(53, 0);      // Size: 53 bytes
-                response.writeUInt16LE(0x9744, 2);  // Protocol response
-                
-                // Payload (49 bytes) - based on working PCAP structure
-                const payload = Buffer.from([
+                // Use exact working response from PCAP without any modifications
+                // This is the response that worked with the original Linux paysys
+                const response = Buffer.from([
+                    0x35, 0x00, 0x97, 0x44,  // Header: size=53, protocol=0x4497
                     0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4, 
                     0x00, 0xfa, 0x40, 0xa1, 0x99, 0xa1, 
                     0x37, 0x44, 0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4,
@@ -143,18 +138,11 @@ class SimplePaySysServer {
                     0x37, 0x44, 0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4,
                     0x00, 0xfb, 0x40, 0xa1, 0x99, 0x32, 0xca, 0x39, 0xdb
                 ]);
-                payload.copy(response, 4);
-                
-                // Set RetCode to ACTION_SUCCESS (1) at the beginning of KAccountUserReturnVerify structure
-                response.writeUInt32LE(1, 4);  // nReturn = ACTION_SUCCESS
-                
-                // Set timestamp at appropriate offset for KG_stime (keep original at offset 46)
-                const currentTime = Math.floor(Date.now() / 1000);
-                response.writeUInt32LE(currentTime, 46);
                 
                 socket.write(response);
-                this.log(`[Simple PaySys] Sent response with RetCode=1 (ACTION_SUCCESS) and timestamp ${currentTime}: ${response.length} bytes`);
-                this.log(`[Simple PaySys] Response should pass both pVerifyReturn->nReturn check and KG_stime`);
+                this.log(`[Simple PaySys] Sent exact PCAP response: ${response.length} bytes`);
+                this.log(`[Simple PaySys] Response matches working PCAP capture exactly - should pass all Bishop checks`);
+                
                 
             } else {
                 this.log(`[Simple PaySys] Unexpected Bishop packet length: ${data.length}`);
