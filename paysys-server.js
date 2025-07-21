@@ -145,13 +145,16 @@ class SimplePaySysServer {
                 ]);
                 payload.copy(response, 4);
                 
-                // Bishop reads timestamp from offset 46 (0x2e) - put current Unix timestamp there
+                // Set RetCode to ACTION_SUCCESS (1) at the beginning of KAccountUserReturnVerify structure
+                response.writeUInt32LE(1, 4);  // nReturn = ACTION_SUCCESS
+                
+                // Set timestamp at appropriate offset for KG_stime (keep original at offset 46)
                 const currentTime = Math.floor(Date.now() / 1000);
                 response.writeUInt32LE(currentTime, 46);
                 
                 socket.write(response);
-                this.log(`[Simple PaySys] Sent response with current timestamp ${currentTime} at offset 46: ${response.length} bytes`);
-                this.log(`[Simple PaySys] This should allow KG_stime to succeed`);
+                this.log(`[Simple PaySys] Sent response with RetCode=1 (ACTION_SUCCESS) and timestamp ${currentTime}: ${response.length} bytes`);
+                this.log(`[Simple PaySys] Response should pass both pVerifyReturn->nReturn check and KG_stime`);
                 
             } else {
                 this.log(`[Simple PaySys] Unexpected Bishop packet length: ${data.length}`);
