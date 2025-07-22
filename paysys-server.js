@@ -381,10 +381,11 @@ class PaySysServer {
                 }
             }
             
-            if (data.length >= 72) {
-                // Use simple extraction from working version
-                const username = this.extractString(data, 4, 32);
-                const password = this.extractString(data, 36, 32);
+            if (data.length >= 40) {
+                // Extract username/password from correct offset (after header + key)
+                // Header: 4 bytes (size + protocol), Key: 4 bytes, then username starts at offset 8
+                const username = this.extractString(data, 8, 32);
+                const password = this.extractString(data, 40, 32);
                 
                 this.log(`[Paysys] Player login attempt: ${username}`);
                 
@@ -397,15 +398,15 @@ class PaySysServer {
                     
                     if (rows.length > 0 && rows[0].password === password) {
                         this.log(`[Paysys] Player login successful: ${username}`);
-                        this.sendPlayerVerifyResponse(socket, username, true);
+                        this.sendPlayerVerifyResponse(socket, requestKey, username, true);
                     } else {
                         this.log(`[Paysys] Player login failed: ${username}`);
-                        this.sendPlayerVerifyResponse(socket, username, false);
+                        this.sendPlayerVerifyResponse(socket, requestKey, username, false);
                     }
                 } else {
                     // No database connection - allow login for testing
                     this.log(`[Paysys] No database - allowing player login: ${username}`);
-                    this.sendPlayerVerifyResponse(socket, username, true);
+                    this.sendPlayerVerifyResponse(socket, requestKey, username, true);
                 }
                 
             } else {
@@ -417,24 +418,29 @@ class PaySysServer {
         }
     }
 
-    sendPlayerVerifyResponse(socket, username, success) {
+    sendPlayerVerifyResponse(socket, requestKey, username, success) {
         try {
-            // Use exact format from working simple version
+            // Bishop expects: Protocol 63 (0x3F00), Size 62, with matching Key
+            // From bishop log: "ReceivePackages() RecvPackage From PaySys Protocol = 255; Size = 62; Key = xxx"
+            // The Protocol 255 suggests byte order issue - 0x3F in wrong position
+            
             const response = Buffer.alloc(64);
-            response.writeUInt16LE(64, 0);       // Size: 64 bytes
-            response.writeUInt16LE(0x3F, 2);     // Response protocol for player verify (Protocol 63)
-            response.writeUInt32LE(success ? 1 : 0, 4);  // Success/failure code at offset 4
-            response.write(username, 8, 32, 'utf8'); // Username at offset 8
+            response.writeUInt16LE(64, 0);       // Size: 64 bytes total packet
+            response.writeUInt16LE(0x3F00, 2);   // Response protocol 63 (0x3F) - try different byte order
+            response.writeUInt32LE(requestKey, 4); // Use original request Key so Bishop can match request/response
+            response.writeUInt32LE(success ? 1 : 0, 8);  // Success/failure code
+            response.write(username, 12, 32, 'utf8'); // Username after the success code
             
             this.log(`[Paysys] Sending player verify response:`);
             this.log(`[Paysys]   Response size: ${response.readUInt16LE(0)} bytes`);
             this.log(`[Paysys]   Response protocol: 0x${response.readUInt16LE(2).toString(16)}`);
-            this.log(`[Paysys]   Success code: ${response.readUInt32LE(4)}`);
-            this.log(`[Paysys]   Username: "${this.extractString(response, 8, 32)}"`);
+            this.log(`[Paysys]   Request Key: ${requestKey} -> Response Key: ${response.readUInt32LE(4)}`);
+            this.log(`[Paysys]   Success code: ${response.readUInt32LE(8)}`);
+            this.log(`[Paysys]   Username: "${this.extractString(response, 12, 32)}"`);
             this.log(`[Paysys]   Response hex: ${response.toString('hex')}`);
             
             socket.write(response);
-            this.log(`[Paysys] Sent player verify ${success ? 'success' : 'failure'} response: ${response.length} bytes`);
+            this.log(`[Paysys] Sent player verify ${success ? 'success' : 'failure'} response: ${response.length} bytes, Key: ${requestKey}`);
         } catch (error) {
             this.log(`[Paysys] Error sending player verify response: ${error.message}`);
         }
