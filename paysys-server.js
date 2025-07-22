@@ -210,34 +210,22 @@ class PaySysServer {
                 const protocol = data.readUInt16LE(2);
                 this.log(`[Paysys] 127-byte Bishop packet, protocol: 0x${protocol.toString(16)}`);
                 
-                // Create response with proper timestamp at offset 46
-                // Bishop reads 4-byte timestamp starting at payload offset 46 (0x2e)
-                const response = Buffer.alloc(54); // 4-byte header + 50-byte payload
-                
-                // Header
-                response.writeUInt16LE(54, 0);     // Size: 54 bytes total  
-                response.writeUInt16LE(0x4497, 2); // Protocol response
-                
-                // Payload - based on working PCAP but extended to 50 bytes
-                const payloadBytes = [
+                // From PCAP: Working response is exactly 53 bytes: 3500 9744 6137 cc16...
+                const response = Buffer.from([
+                    0x35, 0x00,   // Size: 53 bytes
+                    0x97, 0x44,   // Protocol response
+                    // Payload (49 bytes) - exact from working PCAP
                     0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4, 
                     0x00, 0xfa, 0x40, 0xa1, 0x99, 0xa1, 
                     0x37, 0x44, 0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4,
                     0x00, 0xfa, 0x40, 0xa1, 0x99, 0xa1,
                     0x37, 0x44, 0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4,
-                    0x00, 0xfb, 0x40, 0xa1, 0x99, 0x32
-                ];
-                
-                // Copy payload bytes
-                Buffer.from(payloadBytes).copy(response, 4);
-                
-                // Set current Unix timestamp at offset 46 in payload (offset 50 in packet)
-                const currentTime = Math.floor(Date.now() / 1000);
-                response.writeUInt32LE(currentTime, 4 + 46);
+                    0x00, 0xfb, 0x40, 0xa1, 0x99, 0x32, 0xca, 0x39, 0xdb
+                ]);
                 
                 socket.write(response);
-                this.log(`[Paysys] Sent Bishop response: 54 bytes with timestamp at offset 46`);
-                this.log(`[Paysys] Timestamp value: ${currentTime} (should allow KG_stime to succeed)`);
+                this.log(`[Paysys] Sent exact PCAP response: ${response.length} bytes`);
+                this.log(`[Paysys] Response matches working PCAP capture exactly - should pass all Bishop checks`);
                 
             } else if (data.length === 227) {
                 // This is likely a player identity verification request (Protocol 62)
