@@ -210,23 +210,29 @@ class PaySysServer {
                 const protocol = data.readUInt16LE(2);
                 this.log(`[Paysys] 127-byte Bishop packet, protocol: 0x${protocol.toString(16)}`);
                 
-                // Create Bishop Identity Verify Result response (53 bytes total)
-                // Bishop expects P2B_BISHOP_IDENTITY_VERIFY_RESULT protocol
+                // From PCAP: Working response is exactly 53 bytes: 3500 9744 6137 cc16...
                 const response = Buffer.from([
-                    // Header (4 bytes)
-                    0x35, 0x00, 0x1E, 0x97,  // Size=53, Protocol=0x971E (P2B_BISHOP_IDENTITY_VERIFY_RESULT)
-                    
-                    // Payload (49 bytes) - KAccountUserReturnVerify structure 
-                    0x01, 0x00, 0x00, 0x00,  // nReturn = 1 (ACTION_SUCCESS)
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x72, 0x6d, 0x40, 0x01, 0x00, 0x00, 0x00
+                    0x35, 0x00,   // Size: 53 bytes
+                    0x97, 0x44,   // Protocol response
+                    // Payload (49 bytes) - exact from working PCAP
+                    0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4, 
+                    0x00, 0xfa, 0x40, 0xa1, 0x99, 0xa1, 
+                    0x37, 0x44, 0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4,
+                    0x00, 0xfa, 0x40, 0xa1, 0x99, 0xa1,
+                    0x37, 0x44, 0x61, 0x37, 0xcc, 0x16, 0x16, 0xb0, 0x5d, 0xd4,
+                    0x00, 0xfb, 0x40, 0xa1, 0x99, 0x32, 0xca, 0x39, 0xdb
                 ]);
                 
                 socket.write(response);
-                this.log(`[Paysys] Sent Bishop Identity Verify Result: ${response.length} bytes`);
-                this.log(`[Paysys] Protocol: 0x971E (P2B_BISHOP_IDENTITY_VERIFY_RESULT) - should match Bishop expectation`);
+                this.log(`[Paysys] Sent exact PCAP response: ${response.length} bytes`);
+                this.log(`[Paysys] Response matches working PCAP capture exactly - should pass all Bishop checks`);
+                
+            } else if (data.length === 227) {
+                // This is likely a player identity verification request (Protocol 62)
+                this.handlePlayerIdentityVerify(socket, data, connectionId);
+                
+            } else {
+                this.log(`[Paysys] Unexpected Bishop packet length: ${data.length}`);
             }
             
         } catch (error) {
