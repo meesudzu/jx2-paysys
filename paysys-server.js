@@ -177,12 +177,10 @@ class PaySysServer {
             if (data.length === 127) {
                 // Bishop packets - use working logic from simple version
                 this.handleBishopPacket(socket, data, connectionId);
-            } else if (data.length === 227) {
-                // Player identity verification - Protocol 62 (exactly 227 bytes as per Bishop logs)
+            } else if (data.length === 227 || data.length === 229) {
+                // Player identity verification - Protocol 62 
+                // Bishop sends 227-byte payload but actual packet can be 229 bytes (2-byte header + 227 payload)
                 this.handlePlayerIdentityVerify(socket, data, connectionId);
-            } else if (data.length === 229) {
-                // Large Bishop packets - different from player verification
-                this.handleLargeBishopPacket(socket, data, connectionId);
             } else if (data.length === 7) {
                 // Short Bishop packets - ping or simple commands
                 this.handleShortBishopPacket(socket, data, connectionId);
@@ -280,33 +278,11 @@ class PaySysServer {
             }
             
             if (data.length >= 72) {
-                // Try multiple offsets for username/password extraction
-                let username = '';
-                let password = '';
+                // Use simple extraction from working version
+                const username = this.extractString(data, 4, 32);
+                const password = this.extractString(data, 36, 32);
                 
-                // Common offsets based on protocol analysis
-                const usernameOffsets = [8, 12, 16, 20, 24];
-                const passwordOffsets = [40, 44, 48, 52, 56];
-                
-                for (const offset of usernameOffsets) {
-                    const testUsername = this.extractString(data, offset, 32);
-                    if (testUsername.length > 0 && testUsername.match(/^[a-zA-Z0-9_]+$/)) {
-                        username = testUsername;
-                        this.log(`[Paysys] Found valid username at offset ${offset}: ${username}`);
-                        break;
-                    }
-                }
-                
-                for (const offset of passwordOffsets) {
-                    const testPassword = this.extractString(data, offset, 32);
-                    if (testPassword.length > 0) {
-                        password = testPassword;
-                        this.log(`[Paysys] Found password at offset ${offset}: ${password}`);
-                        break;
-                    }
-                }
-                
-                this.log(`[Paysys] Player login attempt: username="${username}", password="${password}"`);
+                this.log(`[Paysys] Player login attempt: ${username}`);
                 
                 if (this.dbConnection) {
                     // Query account from database
@@ -317,15 +293,15 @@ class PaySysServer {
                     
                     if (rows.length > 0 && rows[0].password === password) {
                         this.log(`[Paysys] Player login successful: ${username}`);
-                        this.sendPlayerVerifyResponse(socket, username, true, requestKey);
+                        this.sendPlayerVerifyResponse(socket, username, true);
                     } else {
                         this.log(`[Paysys] Player login failed: ${username}`);
-                        this.sendPlayerVerifyResponse(socket, username, false, requestKey);
+                        this.sendPlayerVerifyResponse(socket, username, false);
                     }
                 } else {
                     // No database connection - allow login for testing
                     this.log(`[Paysys] No database - allowing player login: ${username}`);
-                    this.sendPlayerVerifyResponse(socket, username, true, requestKey);
+                    this.sendPlayerVerifyResponse(socket, username, true);
                 }
                 
             } else {
@@ -337,25 +313,24 @@ class PaySysServer {
         }
     }
 
-    sendPlayerVerifyResponse(socket, username, success, requestKey) {
+    sendPlayerVerifyResponse(socket, username, success) {
         try {
-            // Bishop expects response with matching Key field
+            // Use exact format from working simple version
             const response = Buffer.alloc(64);
             response.writeUInt16LE(64, 0);       // Size: 64 bytes
             response.writeUInt16LE(0x3F, 2);     // Response protocol for player verify (Protocol 63)
-            response.writeUInt32LE(requestKey, 4); // Echo back the request Key so Bishop can match it
-            response.writeUInt32LE(success ? 1 : 0, 8);  // Success/failure code at offset 8
-            response.write(username, 12, 32, 'utf8'); // Username at offset 12
+            response.writeUInt32LE(success ? 1 : 0, 4);  // Success/failure code at offset 4
+            response.write(username, 8, 32, 'utf8'); // Username at offset 8
             
             this.log(`[Paysys] Sending player verify response:`);
             this.log(`[Paysys]   Response size: ${response.readUInt16LE(0)} bytes`);
             this.log(`[Paysys]   Response protocol: 0x${response.readUInt16LE(2).toString(16)}`);
-            this.log(`[Paysys]   Response key: ${response.readUInt32LE(4)}`);
-            this.log(`[Paysys]   Success code: ${response.readUInt32LE(8)}`);
+            this.log(`[Paysys]   Success code: ${response.readUInt32LE(4)}`);
+            this.log(`[Paysys]   Username: "${this.extractString(response, 8, 32)}"`);
             this.log(`[Paysys]   Response hex: ${response.toString('hex')}`);
             
             socket.write(response);
-            this.log(`[Paysys] Sent player verify ${success ? 'success' : 'failure'} response: ${response.length} bytes, Key: ${requestKey}`);
+            this.log(`[Paysys] Sent player verify ${success ? 'success' : 'failure'} response: ${response.length} bytes`);
         } catch (error) {
             this.log(`[Paysys] Error sending player verify response: ${error.message}`);
         }
