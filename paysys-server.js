@@ -146,22 +146,17 @@ class PaySysServer {
         });
     }
 
-    // WORKING Bishop security key from simple version
+    // WORKING Bishop security key from simple version - restored working format
     sendSecurityKey(socket, connectionId) {
         try {
             this.log(`[Paysys] Connection ${connectionId} - Sending security key like original paysys`);
             
-            // Exact security key packet from working PCAP capture
+            // From working commit 656aabe - exact format that Bishop accepts
             const packet = Buffer.from([
-                // Header: 34-byte packet, protocol 0x00, flags 0x2000
-                0x22, 0x00, 0x00, 0x20,
-                
-                // Padding (6 zero bytes)
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                
-                // Security key (8 bytes) - from working capture
-                0x6a, 0x6d, 0x40, 0xa1, 0x99, 0x32, 0xca, 0x39,
-                
+                0x22, 0x00, 0x20, 0x00,  // Header: size=34, protocol=0x2000 (CIPHER_PROTOCOL_TYPE)
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // Padding
+                // Security key (8 bytes) - using same pattern as working capture
+                0xf5, 0x4d, 0x3f, 0xc9, 0x5a, 0xcf, 0xb2, 0x5e,
                 // Padding (16 zero bytes)
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
