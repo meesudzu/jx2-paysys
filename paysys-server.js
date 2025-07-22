@@ -210,10 +210,11 @@ class PaySysServer {
                 const protocol = data.readUInt16LE(2);
                 this.log(`[Paysys] 127-byte Bishop packet, protocol: 0x${protocol.toString(16)}`);
                 
-                // Create EXACT response from working PCAP capture (53 bytes total)
+                // Create Bishop Identity Verify Result response (53 bytes total)
+                // Bishop expects P2B_BISHOP_IDENTITY_VERIFY_RESULT protocol
                 const response = Buffer.from([
                     // Header (4 bytes)
-                    0x35, 0x00, 0x97, 0x44, 
+                    0x35, 0x00, 0x1E, 0x97,  // Size=53, Protocol=0x971E (P2B_BISHOP_IDENTITY_VERIFY_RESULT)
                     
                     // Payload (49 bytes) - KAccountUserReturnVerify structure 
                     0x01, 0x00, 0x00, 0x00,  // nReturn = 1 (ACTION_SUCCESS)
@@ -224,8 +225,8 @@ class PaySysServer {
                 ]);
                 
                 socket.write(response);
-                this.log(`[Paysys] Sent exact PCAP response: ${response.length} bytes`);
-                this.log(`[Paysys] Response matches working PCAP capture exactly - should pass all Bishop checks`);
+                this.log(`[Paysys] Sent Bishop Identity Verify Result: ${response.length} bytes`);
+                this.log(`[Paysys] Protocol: 0x971E (P2B_BISHOP_IDENTITY_VERIFY_RESULT) - should match Bishop expectation`);
             }
             
         } catch (error) {
