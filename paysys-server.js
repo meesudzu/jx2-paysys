@@ -283,15 +283,20 @@ class PaySysServer {
                 this.handleBishopPacket(socket, data, connectionId);
             } else if (data.length === 229) {
                 // Player identity verification from PCAP analysis
-                // Check protocol to distinguish from other 229-byte packets
+                // Protocol bytes are at offset 2, read as little-endian 16-bit value
+                // PCAP shows: e500 ff42 = length 229, protocol 0x42ff (0x42 in big-endian)  
+                // But user logs show different protocol: 0xe0ff - handle both cases
                 const protocol = data.readUInt16LE(2);
                 this.log(`[Paysys] 229-byte packet, protocol: 0x${protocol.toString(16)} (${protocol})`);
                 
-                if (protocol === 0x42FF || protocol === 0xe0ff) {
-                    // PCAP-verified player verification (0x42FF) or actual protocol from logs (0xe0ff)
+                // From PCAP analysis: request protocol is 0x42ff, response should be 0xa8ff
+                // But also handle 0xe0ff protocol seen in user logs
+                if (protocol === 0x42ff || protocol === 0xe0ff) {
+                    // PCAP-verified player verification protocol OR user logs protocol
                     this.handlePlayerIdentityVerifyFromPCAP(socket, data, connectionId);
                 } else {
-                    // Other 229-byte packets
+                    // Other 229-byte packets - log for debugging
+                    this.log(`[Paysys] Unknown 229-byte packet protocol: 0x${protocol.toString(16)}, routing to large packet handler`);
                     this.handleLargeBishopPacket(socket, data, connectionId);
                 }
             } else if (data.length === 227) {
@@ -512,53 +517,50 @@ class PaySysServer {
     async handlePlayerIdentityVerifyFromPCAP(socket, data, connectionId) {
         try {
             this.log(`[Paysys] Player identity verification from PCAP: ${data.length} bytes`);
-            this.log(`[Paysys] First 8 bytes hex: ${data.subarray(0, 8).toString('hex')}`);
+            this.log(`[Paysys] Full packet hex: ${data.toString('hex')}`);
             
-            // Extract protocol and key from the request
+            // Extract protocol and potential key from the request
             const protocol = data.readUInt16LE(2); 
-            const requestKey = data.readUInt32LE(4); // Key at offset 4
-            this.log(`[Paysys] Request protocol: 0x${protocol.toString(16)} (${protocol}), Key: ${requestKey}`);
+            this.log(`[Paysys] Request protocol: 0x${protocol.toString(16)} (expected 0x42ff or 0xe0ff)`);
             
-            if (protocol !== 0x42FF && protocol !== 0xe0ff) {
-                this.log(`[Paysys] Unexpected protocol for player verification: 0x${protocol.toString(16)}`);
+            if (protocol !== 0x42ff && protocol !== 0xe0ff) {
+                this.log(`[Paysys] ERROR: Unexpected protocol for player verification: 0x${protocol.toString(16)}, expected 0x42ff or 0xe0ff`);
                 return;
             }
             
-            // Try to extract username (assuming it might be encrypted or encoded)
-            // For now, let's allow login for any user since the packet appears encrypted
-            let username = "testuser";
-            let loginSuccess = true; // Allow login based on PCAP success response
-            
-            this.log(`[Paysys] Player login attempt from PCAP protocol: ${username}`);
-            
             // Create exact response matching PCAP: 169 bytes with Protocol 0xa8ff
-            const response = Buffer.alloc(169);
-            
-            // Header from PCAP: a900 ffa8 = size 169, protocol 0xa8ff
-            response.writeUInt16LE(169, 0);        // Size: 169 bytes
-            response.writeUInt16LE(0xa8ff, 2);     // Protocol: 0xa8ff (response to 0x42ff/0xe0ff)
-            response.writeUInt32LE(requestKey, 4); // Include request Key for Bishop matching
-            
-            // Fill payload with pattern from PCAP analysis
-            // The PCAP shows repeating pattern: 575c 6761 faea 49c8 e751 81e7 c203 b7a8
-            const pcapPattern = Buffer.from([
+            // From PCAP analysis: a900 ffa8 575c 6761 faeb 49c8...
+            const response = Buffer.from([
+                // Header: a900 ffa8 (169 bytes, protocol 0xa8ff)
+                0xa9, 0x00, 0xff, 0xa8,
+                // Exact payload from PCAP
+                0x57, 0x5c, 0x67, 0x61, 0xfa, 0xeb, 0x49, 0xc8,
+                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
                 0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
-                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8
+                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+                0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+                0xe7, 0x50, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+                0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+                0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+                0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+                0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+                0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+                0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+                0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+                0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+                0x57, 0x5c, 0x67, 0x61, 0xc1
             ]);
             
-            // Fill the response payload with the PCAP pattern
-            for (let offset = 8; offset < 169; offset += pcapPattern.length) {
-                const remainingBytes = Math.min(pcapPattern.length, 169 - offset);
-                pcapPattern.copy(response, offset, 0, remainingBytes);
-            }
-            
-            // Adjust the last few bytes as shown in PCAP (slightly different pattern)
-            const lastBytes = Buffer.from([0x57, 0x5c, 0x67, 0x61, 0xc1]);
-            lastBytes.copy(response, 164, 0, 5);
-            
             socket.write(response);
-            this.log(`[Paysys] Sent PCAP-exact player verify response: ${response.length} bytes, Protocol: 0x${response.readUInt16LE(2).toString(16)}, Key: ${response.readUInt32LE(4)}`);
+            this.log(`[Paysys] Sent exact PCAP player verify response: ${response.length} bytes`);
             this.log(`[Paysys] Response header: ${response.subarray(0, 8).toString('hex')}`);
+            this.log(`[Paysys] Response protocol: 0x${response.readUInt16LE(2).toString(16)} (should be 0xa8ff)`);
             
         } catch (error) {
             this.log(`[Paysys] Error in PCAP player identity verify: ${error.message}`);
