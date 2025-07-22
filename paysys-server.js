@@ -177,8 +177,8 @@ class PaySysServer {
             if (data.length === 127) {
                 // Bishop packets - use working logic from simple version
                 this.handleBishopPacket(socket, data, connectionId);
-            } else if (data.length === 227) {
-                // Player identity verification - Protocol 62
+            } else if (data.length === 227 || data.length === 229) {
+                // Player identity verification - Protocol 62 (sometimes 227, sometimes 229 bytes due to padding)
                 this.handlePlayerIdentityVerify(socket, data, connectionId);
             } else if (data.length === 7) {
                 // Short Bishop packets - ping or simple commands
@@ -186,9 +186,6 @@ class PaySysServer {
             } else if (data.length === 47) {
                 // Medium Bishop packets - various game operations
                 this.handleMediumBishopPacket(socket, data, connectionId);
-            } else if (data.length === 229) {
-                // Large Bishop packets - complex operations
-                this.handleLargeBishopPacket(socket, data, connectionId);
             } else {
                 this.log(`[Paysys] Unexpected packet length: ${data.length}`);
                 this.log(`[Paysys] First 8 bytes: ${data.subarray(0, Math.min(8, data.length)).toString('hex')}`);
@@ -251,15 +248,21 @@ class PaySysServer {
         return str;
     }
 
-    // WORKING Player identity verification from simple version (Protocol 62, 227 bytes)
+    // WORKING Player identity verification from simple version (Protocol 62, 227/229 bytes)
     async handlePlayerIdentityVerify(socket, data, connectionId) {
         try {
             this.log(`[Paysys] Player identity verification: ${data.length} bytes`);
             this.log(`[Paysys] First 8 bytes: ${data.subarray(0, 8).toString('hex')}`);
             
+            // Extract protocol and key from request
+            const requestProtocol = data.readUInt16LE(2);
+            const requestKey = data.readUInt32LE(4); // Bishop tracks requests by Key
+            
+            this.log(`[Paysys] Request protocol: 0x${requestProtocol.toString(16)}, Key: ${requestKey}`);
+            
             if (data.length >= 72) {
-                const username = this.extractString(data, 4, 32);
-                const password = this.extractString(data, 36, 32);
+                const username = this.extractString(data, 8, 32);  // Username might be at offset 8, not 4
+                const password = this.extractString(data, 40, 32); // Password at offset 40, not 36
                 
                 this.log(`[Paysys] Player login attempt: ${username}`);
                 
@@ -272,15 +275,15 @@ class PaySysServer {
                     
                     if (rows.length > 0 && rows[0].password === password) {
                         this.log(`[Paysys] Player login successful: ${username}`);
-                        this.sendPlayerVerifyResponse(socket, username, true);
+                        this.sendPlayerVerifyResponse(socket, username, true, requestKey);
                     } else {
                         this.log(`[Paysys] Player login failed: ${username}`);
-                        this.sendPlayerVerifyResponse(socket, username, false);
+                        this.sendPlayerVerifyResponse(socket, username, false, requestKey);
                     }
                 } else {
                     // No database connection - allow login for testing
                     this.log(`[Paysys] No database - allowing player login: ${username}`);
-                    this.sendPlayerVerifyResponse(socket, username, true);
+                    this.sendPlayerVerifyResponse(socket, username, true, requestKey);
                 }
                 
             } else {
@@ -292,16 +295,18 @@ class PaySysServer {
         }
     }
 
-    sendPlayerVerifyResponse(socket, username, success) {
+    sendPlayerVerifyResponse(socket, username, success, requestKey) {
         try {
+            // Bishop expects response with matching Key field
             const response = Buffer.alloc(64);
             response.writeUInt16LE(64, 0);       // Size: 64 bytes
-            response.writeUInt16LE(0x3F, 2);     // Response protocol for player verify
-            response.writeUInt32LE(success ? 1 : 0, 4);  // Success/failure code
-            response.write(username, 8, 32, 'utf8'); // Echo username back
+            response.writeUInt16LE(0x3F, 2);     // Response protocol for player verify (Protocol 63)
+            response.writeUInt32LE(requestKey, 4); // Echo back the request Key so Bishop can match it
+            response.writeUInt32LE(success ? 1 : 0, 8);  // Success/failure code at offset 8
+            response.write(username, 12, 32, 'utf8'); // Username at offset 12
             
             socket.write(response);
-            this.log(`[Paysys] Sent player verify ${success ? 'success' : 'failure'} response: ${response.length} bytes`);
+            this.log(`[Paysys] Sent player verify ${success ? 'success' : 'failure'} response: ${response.length} bytes, Key: ${requestKey}`);
         } catch (error) {
             this.log(`[Paysys] Error sending player verify response: ${error.message}`);
         }
