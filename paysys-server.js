@@ -177,9 +177,12 @@ class PaySysServer {
             if (data.length === 127) {
                 // Bishop packets - use working logic from simple version
                 this.handleBishopPacket(socket, data, connectionId);
-            } else if (data.length === 227 || data.length === 229) {
-                // Player identity verification - Protocol 62 (sometimes 227, sometimes 229 bytes due to padding)
+            } else if (data.length === 227) {
+                // Player identity verification - Protocol 62 (exactly 227 bytes as per Bishop logs)
                 this.handlePlayerIdentityVerify(socket, data, connectionId);
+            } else if (data.length === 229) {
+                // Large Bishop packets - different from player verification
+                this.handleLargeBishopPacket(socket, data, connectionId);
             } else if (data.length === 7) {
                 // Short Bishop packets - ping or simple commands
                 this.handleShortBishopPacket(socket, data, connectionId);
@@ -252,7 +255,7 @@ class PaySysServer {
     async handlePlayerIdentityVerify(socket, data, connectionId) {
         try {
             this.log(`[Paysys] Player identity verification: ${data.length} bytes`);
-            this.log(`[Paysys] First 8 bytes: ${data.subarray(0, 8).toString('hex')}`);
+            this.log(`[Paysys] Full packet hex: ${data.toString('hex')}`);
             
             // Extract protocol and key from request
             const requestProtocol = data.readUInt16LE(2);
@@ -260,11 +263,50 @@ class PaySysServer {
             
             this.log(`[Paysys] Request protocol: 0x${requestProtocol.toString(16)}, Key: ${requestKey}`);
             
+            // Debug: show packet structure
+            this.log(`[Paysys] Packet structure analysis:`);
+            this.log(`[Paysys]   Size: ${data.readUInt16LE(0)} (offset 0)`);
+            this.log(`[Paysys]   Protocol: 0x${data.readUInt16LE(2).toString(16)} (offset 2)`);
+            this.log(`[Paysys]   Key: ${data.readUInt32LE(4)} (offset 4)`);
+            
+            // Try different offsets to find username/password
+            for (let offset = 8; offset <= 72; offset += 4) {
+                if (offset + 32 < data.length) {
+                    const testStr = this.extractString(data, offset, 32);
+                    if (testStr.length > 0 && testStr.match(/^[a-zA-Z0-9_]+$/)) {
+                        this.log(`[Paysys] Possible username at offset ${offset}: "${testStr}"`);
+                    }
+                }
+            }
+            
             if (data.length >= 72) {
-                const username = this.extractString(data, 8, 32);  // Username might be at offset 8, not 4
-                const password = this.extractString(data, 40, 32); // Password at offset 40, not 36
+                // Try multiple offsets for username/password extraction
+                let username = '';
+                let password = '';
                 
-                this.log(`[Paysys] Player login attempt: ${username}`);
+                // Common offsets based on protocol analysis
+                const usernameOffsets = [8, 12, 16, 20, 24];
+                const passwordOffsets = [40, 44, 48, 52, 56];
+                
+                for (const offset of usernameOffsets) {
+                    const testUsername = this.extractString(data, offset, 32);
+                    if (testUsername.length > 0 && testUsername.match(/^[a-zA-Z0-9_]+$/)) {
+                        username = testUsername;
+                        this.log(`[Paysys] Found valid username at offset ${offset}: ${username}`);
+                        break;
+                    }
+                }
+                
+                for (const offset of passwordOffsets) {
+                    const testPassword = this.extractString(data, offset, 32);
+                    if (testPassword.length > 0) {
+                        password = testPassword;
+                        this.log(`[Paysys] Found password at offset ${offset}: ${password}`);
+                        break;
+                    }
+                }
+                
+                this.log(`[Paysys] Player login attempt: username="${username}", password="${password}"`);
                 
                 if (this.dbConnection) {
                     // Query account from database
@@ -304,6 +346,13 @@ class PaySysServer {
             response.writeUInt32LE(requestKey, 4); // Echo back the request Key so Bishop can match it
             response.writeUInt32LE(success ? 1 : 0, 8);  // Success/failure code at offset 8
             response.write(username, 12, 32, 'utf8'); // Username at offset 12
+            
+            this.log(`[Paysys] Sending player verify response:`);
+            this.log(`[Paysys]   Response size: ${response.readUInt16LE(0)} bytes`);
+            this.log(`[Paysys]   Response protocol: 0x${response.readUInt16LE(2).toString(16)}`);
+            this.log(`[Paysys]   Response key: ${response.readUInt32LE(4)}`);
+            this.log(`[Paysys]   Success code: ${response.readUInt32LE(8)}`);
+            this.log(`[Paysys]   Response hex: ${response.toString('hex')}`);
             
             socket.write(response);
             this.log(`[Paysys] Sent player verify ${success ? 'success' : 'failure'} response: ${response.length} bytes, Key: ${requestKey}`);
