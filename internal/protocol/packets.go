@@ -19,6 +19,10 @@ const (
 	PacketTypeUserLogin      PacketType = 0x42FF  // From PCAP analysis 
 	PacketTypeUserResponse   PacketType = 0xA8FF  // From PCAP response analysis
 	
+	// Game client protocol packets (with key field)
+	PacketTypeGameLogin      PacketType = 0x003E  // Protocol 62 - game client login verification
+	PacketTypeGameResponse   PacketType = 0x00FE  // Protocol 254 - game response
+	
 	// Account management packets (inferred from JX2 system)
 	PacketTypeUserLogout     PacketType = 0x0001
 	PacketTypeUserVerify     PacketType = 0x0002
@@ -39,6 +43,13 @@ type PacketHeader struct {
 	Type PacketType  // Packet type
 }
 
+// ExtendedPacketHeader represents packet header with key for game client packets
+type ExtendedPacketHeader struct {
+	Size uint16      // Packet size
+	Type PacketType  // Packet type
+	Key  uint32      // Packet key for request/response matching
+}
+
 // BishopLoginPacket represents Bishop login request
 type BishopLoginPacket struct {
 	Header PacketHeader
@@ -46,6 +57,12 @@ type BishopLoginPacket struct {
 	Unknown2 uint32   // Always seems to be 0x00000000
 	Unknown3 uint32   // Varies - possibly session ID or timestamp
 	BishopID [16]byte // Bishop identifier or auth data
+}
+
+// GameLoginPacket represents game client login verification packet
+type GameLoginPacket struct {
+	Header ExtendedPacketHeader
+	Data   []byte // Game login data
 }
 
 // UserLoginPacket represents user login request (encrypted)
@@ -111,6 +128,8 @@ func ParsePacket(data []byte) (interface{}, error) {
 		return parseBishopLoginPacket(data)
 	case PacketTypeUserLogin:
 		return parseUserLoginPacket(data)
+	case PacketTypeGameLogin:
+		return parseGameLoginPacket(data)
 	default:
 		return nil, fmt.Errorf("unknown packet type: 0x%04X", header.Type)
 	}
@@ -154,6 +173,25 @@ func parseBishopLoginPacket(data []byte) (*BishopLoginPacket, error) {
 			copy(packet.BishopID[:], remainingData[:16])
 		}
 	}
+
+	return packet, nil
+}
+
+func parseGameLoginPacket(data []byte) (*GameLoginPacket, error) {
+	if len(data) < 8 {
+		return nil, fmt.Errorf("game login packet too short")
+	}
+
+	packet := &GameLoginPacket{}
+	buf := bytes.NewReader(data)
+	
+	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
+		return nil, err
+	}
+
+	// Rest is game login data
+	packet.Data = make([]byte, len(data)-8)
+	copy(packet.Data, data[8:])
 
 	return packet, nil
 }
@@ -210,5 +248,21 @@ func CreateBishopResponse(result uint8) []byte {
 	copy(responseData[4:], []byte("PAYSYS_OK")) // Status message
 	
 	buf.Write(responseData)
+	return buf.Bytes()
+}
+
+// CreateGameResponse creates a game response packet with matching key
+func CreateGameResponse(key uint32, result uint8, data []byte) []byte {
+	header := ExtendedPacketHeader{
+		Size: uint16(8 + 1 + len(data)), // header(8) + result(1) + data
+		Type: PacketTypeGameResponse,     // Protocol 254
+		Key:  key,                       // Match the request key
+	}
+
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, header)
+	binary.Write(buf, binary.LittleEndian, result)
+	buf.Write(data)
+
 	return buf.Bytes()
 }

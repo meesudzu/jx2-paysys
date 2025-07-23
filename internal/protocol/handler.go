@@ -39,20 +39,8 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	clientAddr := conn.RemoteAddr().String()
 	log.Printf("[Protocol] New connection from %s", clientAddr)
 	
-	// Send security key immediately (Bishop expects this upon connection)
-	// This matches the working JavaScript implementation
-	securityKeyPacket := h.createSecurityKeyPacket()
-	log.Printf("[Protocol] Sending security key immediately to %s (%d bytes)", clientAddr, len(securityKeyPacket))
-	log.Printf("[Protocol] Security key data: %x", securityKeyPacket)
-	
-	_, err := conn.Write(securityKeyPacket)
-	if err != nil {
-		log.Printf("[Protocol] Failed to send security key to %s: %v", clientAddr, err)
-		conn.Close()
-		return
-	}
-	
-	// Now wait for Bishop to send packets
+	// Don't send security key immediately - wait to see what type of client this is
+	// Read the first packet to determine client type
 	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
@@ -65,12 +53,20 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	log.Printf("[Protocol] Received %d bytes from %s", n, clientAddr)
 	log.Printf("[Protocol] Raw data: %x", data)
 	
-	// Handle different packet lengths like the JavaScript implementation
+	// Handle different packet lengths and types
 	if n == 127 {
-		// Bishop packet - handle and keep connection alive
+		// Bishop packet - send security key first, then handle
+		log.Printf("[Protocol] Bishop connection detected, sending security key")
+		securityKeyPacket := h.createSecurityKeyPacket()
+		_, err := conn.Write(securityKeyPacket)
+		if err != nil {
+			log.Printf("[Protocol] Failed to send security key to %s: %v", clientAddr, err)
+			conn.Close()
+			return
+		}
 		h.handleBishopPacket(conn, data, clientAddr)
 	} else if n == 229 {
-		// Player login packet
+		// Player login packet (original 0x42FF format)
 		packet, err := ParsePacket(data)
 		if err != nil {
 			log.Printf("[Protocol] Error parsing packet from %s: %v", clientAddr, err)
@@ -79,6 +75,21 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 		}
 		if p, ok := packet.(*UserLoginPacket); ok {
 			response := h.handleUserLogin(p, clientAddr)
+			if response != nil {
+				conn.Write(response)
+			}
+		}
+		conn.Close()
+	} else if n == 227 {
+		// Game client login packet (protocol 62 with key)
+		packet, err := ParsePacket(data)
+		if err != nil {
+			log.Printf("[Protocol] Error parsing game packet from %s: %v", clientAddr, err)
+			conn.Close()
+			return
+		}
+		if p, ok := packet.(*GameLoginPacket); ok {
+			response := h.handleGameLogin(p, clientAddr)
 			if response != nil {
 				conn.Write(response)
 			}
@@ -299,6 +310,17 @@ func (h *Handler) handleBishopConnection(conn net.Conn, packet *BishopLoginPacke
 						sessionActive = false
 					}
 				}
+			case *GameLoginPacket:
+				// Game login request via Bishop connection
+				log.Printf("[Protocol] Game login via Bishop session %s", sessionID)
+				gameResponse := h.handleGameLogin(sp, clientAddr)
+				if gameResponse != nil {
+					_, err := conn.Write(gameResponse)
+					if err != nil {
+						log.Printf("[Protocol] Error sending game login response via Bishop: %v", err)
+						sessionActive = false
+					}
+				}
 			default:
 				log.Printf("[Protocol] Unknown packet type in Bishop session %s, sending ACK", sessionID)
 				// Send a simple acknowledgment for unknown packets
@@ -320,6 +342,25 @@ func (h *Handler) handleBishopLogin(packet *BishopLoginPacket, clientAddr string
 	// In a real implementation, you'd verify the Bishop ID against a whitelist
 	response := CreateBishopResponse(0) // 0 = success
 	log.Printf("[Protocol] Bishop login accepted for %s", clientAddr)
+	
+	return response
+}
+
+func (h *Handler) handleGameLogin(packet *GameLoginPacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Game login from %s", clientAddr)
+	log.Printf("[Protocol] Protocol: %d, Key: %d, Size: %d", packet.Header.Type, packet.Header.Key, packet.Header.Size)
+	log.Printf("[Protocol] Data (%d bytes): %x", len(packet.Data), packet.Data)
+	
+	// For game login packets, we typically just need to respond with success
+	// The actual authentication was already done via Bishop
+	// Game is just verifying the paysys connection is working
+	
+	log.Printf("[Protocol] Game login verification successful for %s", clientAddr)
+	
+	// Create minimal response with matching key (protocol 254, size 2, key matching request)
+	// This matches the expected "Protocol = 254; Size = 2; Key = 1" format from the error log
+	response := CreateGameResponse(packet.Header.Key, 0, []byte{}) // Success with no additional data
+	log.Printf("[Protocol] Sending game response: Protocol=%d, Size=%d, Key=%d", PacketTypeGameResponse, len(response), packet.Header.Key)
 	
 	return response
 }
