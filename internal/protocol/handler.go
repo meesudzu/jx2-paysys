@@ -127,6 +127,9 @@ func (h *Handler) handleUserLogin(packet *UserLoginPacket, clientAddr string) []
 			response := CreateEncryptedLoginResponse(4, "Account suspended")
 			return response
 		}
+	} else {
+		// No database mode - accept all logins for testing
+		log.Printf("[Protocol] No database mode - accepting login for %s", username)
 	}
 	
 	log.Printf("[Protocol] Login successful for %s from %s", username, clientAddr)

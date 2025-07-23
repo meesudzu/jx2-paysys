@@ -20,12 +20,19 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Initialize database connection
-	db, err := database.NewConnection(cfg.Database)
+	// Initialize database connection (optional for testing)
+	var db *database.Connection
+	
+	// Try to connect to database, but don't fail if it's not available
+	db, err = database.NewConnection(cfg.Database)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Printf("Warning: Database connection failed: %v", err)
+		log.Println("Running in no-database mode (all logins will be accepted)")
+		db = nil
+	} else {
+		defer db.Close()
+		fmt.Printf("[Database] Connected to MySQL at %s:%d\n", cfg.Database.IP, cfg.Database.Port)
 	}
-	defer db.Close()
 
 	// Initialize protocol handler
 	protocolHandler := protocol.NewHandler(db)
@@ -41,7 +48,6 @@ func main() {
 	}()
 
 	fmt.Printf("[Paysys] Server started on %s:%d\n", cfg.Paysys.IP, cfg.Paysys.Port)
-	fmt.Printf("[Database] Connected to MySQL at %s:%d\n", cfg.Database.IP, cfg.Database.Port)
 
 	// Wait for interrupt signal
 	c := make(chan os.Signal, 1)

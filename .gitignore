@@ -25,3 +25,11 @@ pids/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Go binaries
+paysys
+test
+client
+cmd/paysys/paysys
+cmd/test/test
+cmd/client/client
