@@ -12,6 +12,7 @@ type PacketType uint16
 const (
 	// Bishop connection packets
 	PacketTypeBishopLogin    PacketType = 0x0020  // From PCAP analysis
+	PacketTypeBishopLoginAlt PacketType = 0x1D97  // Alternative Bishop login from actual Bishop binary
 	PacketTypeBishopResponse PacketType = 0x0021
 	
 	// User login packets  
@@ -106,7 +107,7 @@ func ParsePacket(data []byte) (interface{}, error) {
 
 	// Parse based on packet type
 	switch header.Type {
-	case PacketTypeBishopLogin:
+	case PacketTypeBishopLogin, PacketTypeBishopLoginAlt:
 		return parseBishopLoginPacket(data)
 	case PacketTypeUserLogin:
 		return parseUserLoginPacket(data)
@@ -116,7 +117,7 @@ func ParsePacket(data []byte) (interface{}, error) {
 }
 
 func parseBishopLoginPacket(data []byte) (*BishopLoginPacket, error) {
-	if len(data) < 34 { // 4 bytes header + 4 + 4 + 4 + 16 bytes data
+	if len(data) < 4 {
 		return nil, fmt.Errorf("bishop login packet too short")
 	}
 
@@ -126,17 +127,32 @@ func parseBishopLoginPacket(data []byte) (*BishopLoginPacket, error) {
 	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
 		return nil, err
 	}
-	if err := binary.Read(buf, binary.LittleEndian, &packet.Unknown1); err != nil {
-		return nil, err
-	}
-	if err := binary.Read(buf, binary.LittleEndian, &packet.Unknown2); err != nil {
-		return nil, err
-	}
-	if err := binary.Read(buf, binary.LittleEndian, &packet.Unknown3); err != nil {
-		return nil, err
-	}
-	if err := binary.Read(buf, binary.LittleEndian, &packet.BishopID); err != nil {
-		return nil, err
+	
+	// Handle different Bishop packet structures based on size
+	if len(data) >= 34 {
+		// Original structure for 34-byte packets
+		if err := binary.Read(buf, binary.LittleEndian, &packet.Unknown1); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(buf, binary.LittleEndian, &packet.Unknown2); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(buf, binary.LittleEndian, &packet.Unknown3); err != nil {
+			return nil, err
+		}
+		if err := binary.Read(buf, binary.LittleEndian, &packet.BishopID); err != nil {
+			return nil, err
+		}
+	} else {
+		// For shorter packets, just read what we can
+		remainingData := make([]byte, len(data)-4)
+		if _, err := buf.Read(remainingData); err != nil {
+			return nil, err
+		}
+		// Store first 16 bytes as Bishop ID if available
+		if len(remainingData) >= 16 {
+			copy(packet.BishopID[:], remainingData[:16])
+		}
 	}
 
 	return packet, nil
@@ -176,18 +192,23 @@ func CreateLoginResponse(result uint8, additionalData []byte) []byte {
 	return buf.Bytes()
 }
 
-// CreateBishopResponse creates a simple bishop response packet
+// CreateBishopResponse creates a Bishop response packet
 func CreateBishopResponse(result uint8) []byte {
-	// According to protocol documentation, Bishop response should be simple:
-	// Size(2) + Type(2) + Result(1) = 5 bytes total
+	// According to the working JavaScript implementation, Bishop response should be:
+	// Response type 0x971E with 32-byte payload
 	header := PacketHeader{
-		Size: 5, // header(4) + result(1)
-		Type: PacketTypeBishopResponse,
+		Size: 36, // header(4) + payload(32)
+		Type: PacketType(0x971E), // Response type from JavaScript implementation
 	}
 
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, header)
-	binary.Write(buf, binary.LittleEndian, result)
-
+	
+	// Create 32-byte response payload like the JavaScript version
+	responseData := make([]byte, 32)
+	binary.LittleEndian.PutUint32(responseData[0:], 1) // Success code
+	copy(responseData[4:], []byte("PAYSYS_OK")) // Status message
+	
+	buf.Write(responseData)
 	return buf.Bytes()
 }

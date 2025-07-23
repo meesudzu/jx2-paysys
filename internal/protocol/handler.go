@@ -25,7 +25,21 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	clientAddr := conn.RemoteAddr().String()
 	log.Printf("[Protocol] New connection from %s", clientAddr)
 	
-	// Handle connection based on the first packet type
+	// Based on the working JavaScript implementation and the original paysys,
+	// we need to immediately send a security key packet to all new connections
+	// Bishop connections expect this as the first thing
+	securityKeyPacket := h.createSecurityKeyPacket()
+	
+	log.Printf("[Protocol] Sending security key to %s (%d bytes)", clientAddr, len(securityKeyPacket))
+	log.Printf("[Protocol] Security key data: %x", securityKeyPacket)
+	
+	_, err := conn.Write(securityKeyPacket)
+	if err != nil {
+		log.Printf("[Protocol] Failed to send security key to %s: %v", clientAddr, err)
+		return
+	}
+	
+	// Now handle the client's response
 	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
@@ -58,12 +72,29 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	}
 }
 
+// createSecurityKeyPacket creates the security key packet that Bishop expects
+func (h *Handler) createSecurityKeyPacket() []byte {
+	// From working JavaScript implementation:
+	// 34-byte packet with header 0x22, 0x00, 0x20, 0x00 (size=34, protocol=0x2000)
+	// Includes 8-byte security key and 16 bytes of padding
+	packet := []byte{
+		0x22, 0x00, 0x20, 0x00, // Header: size=34, protocol=0x2000 (CIPHER_PROTOCOL_TYPE)
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Padding
+		// Security key (8 bytes) - using same pattern as working capture
+		0xf5, 0x4d, 0x3f, 0xc9, 0x5a, 0xcf, 0xb2, 0x5e,
+		// Padding (16 zero bytes)
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}
+	return packet
+}
+
 func (h *Handler) handleBishopConnection(conn net.Conn, packet *BishopLoginPacket, clientAddr string) {
 	log.Printf("[Protocol] Bishop login from %s", clientAddr)
 	log.Printf("[Protocol] Bishop ID: %x", packet.BishopID)
 	log.Printf("[Protocol] Unknown fields: %08x %08x %08x", packet.Unknown1, packet.Unknown2, packet.Unknown3)
 	
-	// Send initial Bishop response
+	// Send Bishop authentication response
 	response := CreateBishopResponse(0) // 0 = success
 	_, err := conn.Write(response)
 	if err != nil {
