@@ -18,12 +18,18 @@ const (
 	PacketTypeUserLogin      PacketType = 0x42FF  // From PCAP analysis 
 	PacketTypeUserResponse   PacketType = 0xA8FF  // From PCAP response analysis
 	
-	// Other packet types (inferred from strings)
+	// Account management packets (inferred from JX2 system)
 	PacketTypeUserLogout     PacketType = 0x0001
 	PacketTypeUserVerify     PacketType = 0x0002
 	PacketTypeAccountExchange PacketType = 0x0003
 	PacketTypeItemBuy        PacketType = 0x0004
 	PacketTypeItemUse        PacketType = 0x0005
+	PacketTypeCoinQuery      PacketType = 0x0006
+	PacketTypeCoinUpdate     PacketType = 0x0007
+	PacketTypeAccountInfo    PacketType = 0x0008
+	PacketTypePasswordChange PacketType = 0x0009
+	PacketTypeAccountLock    PacketType = 0x000A
+	PacketTypeAccountUnlock  PacketType = 0x000B
 )
 
 // PacketHeader represents the common packet header
@@ -52,6 +58,32 @@ type LoginResponse struct {
 	Header PacketHeader
 	Result uint8    // Login result: 0=success, 1=failed, etc.
 	Data   []byte   // Additional response data
+}
+
+// CoinQueryPacket represents coin balance query
+type CoinQueryPacket struct {
+	Header PacketHeader
+	Username [32]byte // Username for coin query
+}
+
+// CoinUpdatePacket represents coin balance update
+type CoinUpdatePacket struct {
+	Header PacketHeader
+	Username [32]byte // Username for coin update
+	Amount   int64    // Coin amount change (positive or negative)
+	Type     uint8    // Update type: 0=set, 1=add, 2=subtract
+}
+
+// AccountInfoPacket represents account information request
+type AccountInfoPacket struct {
+	Header PacketHeader
+	Username [32]byte // Username for info query
+}
+
+// PasswordChangePacket represents password change request
+type PasswordChangePacket struct {
+	Header PacketHeader
+	EncryptedData []byte // XOR encrypted: username + old_password + new_password
 }
 
 // ParsePacket parses incoming packet data

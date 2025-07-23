@@ -114,17 +114,17 @@ func (h *Handler) handleUserLogin(packet *UserLoginPacket, clientAddr string) []
 			return response
 		}
 		
-		// Check account state
-		state, err := h.db.GetAccountState(username)
+		// Check account locked state (0 = not locked, 1 = locked)
+		lockedState, err := h.db.GetAccountState(username)
 		if err != nil {
 			log.Printf("[Protocol] Error getting account state for %s: %v", username, err)
 			response := CreateEncryptedLoginResponse(2, "Account state error")
 			return response
 		}
 		
-		if state != 0 {
-			log.Printf("[Protocol] Account %s is banned/suspended (state: %d)", username, state)
-			response := CreateEncryptedLoginResponse(4, "Account suspended")
+		if lockedState != 0 {
+			log.Printf("[Protocol] Account %s is locked (locked: %d)", username, lockedState)
+			response := CreateEncryptedLoginResponse(4, "Account locked")
 			return response
 		}
 	} else {
