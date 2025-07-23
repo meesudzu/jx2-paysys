@@ -105,24 +105,53 @@ DBName=jx2_paysys
 
 ### Building
 
-```bash
-# Build the main server
-go build ./cmd/paysys
+#### Using Shell Scripts (Recommended)
 
-# Build the test tool
-go build ./cmd/test
+```bash
+# Build all binaries with correct flags
+./build.sh
+
+# Clean build artifacts
+./clean.sh
+
+# Clean everything including Go cache
+./clean.sh --full
+```
+
+#### Manual Building
+
+```bash
+# Build static Linux binaries
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-w -s" -o paysys-linux-bin ./cmd/paysys
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-w -s" -o test-linux ./cmd/test
 ```
 
 ### Running
 
+#### Using Shell Scripts (Recommended)
+
+```bash
+# Build and run in one command
+./start.sh
+
+# Just run the server (must build first)
+./run.sh
+
+# Run protocol tests
+./test.sh
+```
+
+#### Manual Running
+
 1. Start the paysys server:
 ```bash
-./paysys
+./paysys-linux-bin
 ```
 
 2. Test with the protocol analyzer:
 ```bash
-./test
+./test-linux bishop    # Test Bishop authentication
+./test-linux login admin hello  # Test user login
 ```
 
 ## Protocol Analysis Results
