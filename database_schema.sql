@@ -51,11 +51,11 @@ CREATE TABLE IF NOT EXISTS account_charges (
     INDEX idx_transaction_id (transaction_id)
 );
 
--- Insert test data for development
+-- Insert test data for development (passwords are MD5 hashed)
 INSERT INTO accounts (username, password, state) VALUES 
-('testuser', 'testpass', 0),
-('admin', 'admin123', 0),
-('banned_user', 'password', 1)
+('testuser', 'MD5_testpass_hash', 0),
+('admin', 'C4CA4238A0B923820DCC509A6F75849B', 0),  -- MD5 of "hello"
+('banned_user', 'MD5_password_hash', 1)
 ON DUPLICATE KEY UPDATE username=username;
 
 INSERT INTO bishop_servers (server_id, ip_address, port, status) VALUES
