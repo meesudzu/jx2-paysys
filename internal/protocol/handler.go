@@ -3,6 +3,7 @@ package protocol
 import (
 	"log"
 	"net"
+	"time"
 
 	"jx2-paysys/internal/database"
 )
@@ -24,7 +25,7 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	clientAddr := conn.RemoteAddr().String()
 	log.Printf("[Protocol] New connection from %s", clientAddr)
 	
-	// Read packet data
+	// Handle connection based on the first packet type
 	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
@@ -44,27 +45,76 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	}
 	
 	// Handle based on packet type
-	var response []byte
 	switch p := packet.(type) {
 	case *BishopLoginPacket:
-		response = h.handleBishopLogin(p, clientAddr)
+		h.handleBishopConnection(conn, p, clientAddr)
 	case *UserLoginPacket:
-		response = h.handleUserLogin(p, clientAddr)
+		response := h.handleUserLogin(p, clientAddr)
+		if response != nil {
+			conn.Write(response)
+		}
 	default:
 		log.Printf("[Protocol] Unknown packet type from %s", clientAddr)
+	}
+}
+
+func (h *Handler) handleBishopConnection(conn net.Conn, packet *BishopLoginPacket, clientAddr string) {
+	log.Printf("[Protocol] Bishop login from %s", clientAddr)
+	log.Printf("[Protocol] Bishop ID: %x", packet.BishopID)
+	log.Printf("[Protocol] Unknown fields: %08x %08x %08x", packet.Unknown1, packet.Unknown2, packet.Unknown3)
+	
+	// Send initial Bishop response
+	response := CreateBishopResponse(0) // 0 = success
+	_, err := conn.Write(response)
+	if err != nil {
+		log.Printf("[Protocol] Error sending Bishop response to %s: %v", clientAddr, err)
 		return
 	}
+	log.Printf("[Protocol] Sent %d bytes Bishop response to %s", len(response), clientAddr)
+	log.Printf("[Protocol] Response data: %x", response)
 	
-	// Send response
-	if response != nil {
-		_, err = conn.Write(response)
+	// For Bishop connections, keep the connection alive and handle additional packets
+	log.Printf("[Protocol] Bishop connection established, keeping connection alive for %s", clientAddr)
+	
+	// Bishop connections may expect additional handshake or ongoing communication
+	// Keep reading for additional packets
+	buffer := make([]byte, 4096)
+	for {
+		conn.SetReadDeadline(time.Now().Add(30 * time.Second)) // 30 second timeout
+		n, err := conn.Read(buffer)
 		if err != nil {
-			log.Printf("[Protocol] Error sending response to %s: %v", clientAddr, err)
-		} else {
-			log.Printf("[Protocol] Sent %d bytes response to %s", len(response), clientAddr)
-			log.Printf("[Protocol] Response data: %x", response)
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				log.Printf("[Protocol] Bishop connection timeout for %s", clientAddr)
+			} else {
+				log.Printf("[Protocol] Bishop connection closed by %s: %v", clientAddr, err)
+			}
+			break
+		}
+		
+		if n > 0 {
+			data := buffer[:n]
+			log.Printf("[Protocol] Bishop follow-up packet from %s: %d bytes", clientAddr, n)
+			log.Printf("[Protocol] Data: %x", data)
+			
+			// Parse and handle additional packets
+			followupPacket, err := ParsePacket(data)
+			if err != nil {
+				log.Printf("[Protocol] Error parsing Bishop follow-up packet: %v", err)
+				continue
+			}
+			
+			// Handle different packet types from Bishop
+			switch followupPacket.(type) {
+			case *BishopLoginPacket:
+				// Duplicate login - just ack again
+				conn.Write(CreateBishopResponse(0))
+			default:
+				log.Printf("[Protocol] Unknown Bishop packet type, ignoring")
+			}
 		}
 	}
+	
+	log.Printf("[Protocol] Bishop connection handler ending for %s", clientAddr)
 }
 
 func (h *Handler) handleBishopLogin(packet *BishopLoginPacket, clientAddr string) []byte {
