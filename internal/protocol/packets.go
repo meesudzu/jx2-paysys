@@ -176,16 +176,28 @@ func CreateLoginResponse(result uint8, additionalData []byte) []byte {
 	return buf.Bytes()
 }
 
-// CreateBishopResponse creates a bishop response packet
+// CreateBishopResponse creates a bishop response packet with security key
 func CreateBishopResponse(result uint8) []byte {
+	// Bishop client expects security key data after the result
+	// Based on error "_RecvSecurityKey", we need to provide key material
+	securityKey := [16]byte{
+		0x45, 0x73, 0x77, 0x29, 0x2F, 0xDA, 0x9A, 0x21,
+		0x10, 0x52, 0xB1, 0x9C, 0x70, 0x93, 0x0E, 0xA0,
+	}
+	
+	// Additional session data (common in game protocols)
+	sessionData := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	
 	header := PacketHeader{
-		Size: 5,
+		Size: 4 + 1 + 16 + 8, // header(4) + result(1) + key(16) + session(8) = 29
 		Type: PacketTypeBishopResponse,
 	}
 
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, header)
 	binary.Write(buf, binary.LittleEndian, result)
+	buf.Write(securityKey[:])
+	buf.Write(sessionData[:])
 
 	return buf.Bytes()
 }
