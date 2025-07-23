@@ -38,32 +38,19 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	clientAddr := conn.RemoteAddr().String()
 	log.Printf("[Protocol] New connection from %s", clientAddr)
 	
-	// Based on the working JavaScript implementation and the original paysys,
-	// we need to immediately send a security key packet to all new connections
-	// Bishop connections expect this as the first thing
-	securityKeyPacket := h.createSecurityKeyPacket()
-	
-	log.Printf("[Protocol] Sending security key to %s (%d bytes)", clientAddr, len(securityKeyPacket))
-	log.Printf("[Protocol] Security key data: %x", securityKeyPacket)
-	
-	_, err := conn.Write(securityKeyPacket)
-	if err != nil {
-		log.Printf("[Protocol] Failed to send security key to %s: %v", clientAddr, err)
-		conn.Close()
-		return
-	}
-	
-	// Now handle the client's response
+	// Based on Bishop error logs, the client initiates the security handshake
+	// The Bishop client expects to send a request first, not receive unsolicited data
+	// So we wait for the client to send the first packet
 	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
-		log.Printf("[Protocol] Error reading from %s: %v", clientAddr, err)
+		log.Printf("[Protocol] Error reading initial packet from %s: %v", clientAddr, err)
 		conn.Close()
 		return
 	}
 	
 	data := buffer[:n]
-	log.Printf("[Protocol] Received %d bytes from %s", n, clientAddr)
+	log.Printf("[Protocol] Received initial %d bytes from %s", n, clientAddr)
 	log.Printf("[Protocol] Raw data: %x", data)
 	
 	// Parse the packet
@@ -77,7 +64,21 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	// Handle based on packet type
 	switch p := packet.(type) {
 	case *BishopLoginPacket:
-		// Bishop connections need persistent session management
+		// Bishop requests security key exchange - send the security key response
+		log.Printf("[Protocol] Bishop requesting security key exchange")
+		securityKeyPacket := h.createSecurityKeyPacket()
+		
+		log.Printf("[Protocol] Sending security key to %s (%d bytes)", clientAddr, len(securityKeyPacket))
+		log.Printf("[Protocol] Security key data: %x", securityKeyPacket)
+		
+		_, err := conn.Write(securityKeyPacket)
+		if err != nil {
+			log.Printf("[Protocol] Failed to send security key to %s: %v", clientAddr, err)
+			conn.Close()
+			return
+		}
+		
+		// Now continue with Bishop session management
 		h.handleBishopConnection(conn, p, clientAddr)
 		// handleBishopConnection manages its own connection lifecycle
 	case *UserLoginPacket:
