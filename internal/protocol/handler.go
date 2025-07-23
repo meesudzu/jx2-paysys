@@ -3,25 +3,38 @@ package protocol
 import (
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"jx2-paysys/internal/database"
 )
 
+// BishopSession represents an active Bishop session
+type BishopSession struct {
+	ID        string
+	Conn      net.Conn
+	StartTime time.Time
+	LastActivity time.Time
+	BishopID  [16]byte
+}
+
 // Handler handles protocol operations
 type Handler struct {
-	db *database.Connection
+	db             *database.Connection
+	bishopSessions map[string]*BishopSession
+	sessionMutex   sync.RWMutex
 }
 
 // NewHandler creates a new protocol handler
 func NewHandler(db *database.Connection) *Handler {
-	return &Handler{db: db}
+	return &Handler{
+		db:             db,
+		bishopSessions: make(map[string]*BishopSession),
+	}
 }
 
 // HandleConnection handles a new client connection
 func (h *Handler) HandleConnection(conn net.Conn) {
-	defer conn.Close()
-	
 	clientAddr := conn.RemoteAddr().String()
 	log.Printf("[Protocol] New connection from %s", clientAddr)
 	
@@ -36,6 +49,7 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	_, err := conn.Write(securityKeyPacket)
 	if err != nil {
 		log.Printf("[Protocol] Failed to send security key to %s: %v", clientAddr, err)
+		conn.Close()
 		return
 	}
 	
@@ -44,6 +58,7 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	n, err := conn.Read(buffer)
 	if err != nil {
 		log.Printf("[Protocol] Error reading from %s: %v", clientAddr, err)
+		conn.Close()
 		return
 	}
 	
@@ -55,20 +70,26 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	packet, err := ParsePacket(data)
 	if err != nil {
 		log.Printf("[Protocol] Error parsing packet from %s: %v", clientAddr, err)
+		conn.Close()
 		return
 	}
 	
 	// Handle based on packet type
 	switch p := packet.(type) {
 	case *BishopLoginPacket:
+		// Bishop connections need persistent session management
 		h.handleBishopConnection(conn, p, clientAddr)
+		// handleBishopConnection manages its own connection lifecycle
 	case *UserLoginPacket:
+		// User login connections are short-lived
 		response := h.handleUserLogin(p, clientAddr)
 		if response != nil {
 			conn.Write(response)
 		}
+		conn.Close()
 	default:
 		log.Printf("[Protocol] Unknown packet type from %s", clientAddr)
+		conn.Close()
 	}
 }
 
@@ -90,9 +111,33 @@ func (h *Handler) createSecurityKeyPacket() []byte {
 }
 
 func (h *Handler) handleBishopConnection(conn net.Conn, packet *BishopLoginPacket, clientAddr string) {
+	defer conn.Close() // Ensure connection is closed when this function exits
+	
 	log.Printf("[Protocol] Bishop login from %s", clientAddr)
 	log.Printf("[Protocol] Bishop ID: %x", packet.BishopID)
 	log.Printf("[Protocol] Unknown fields: %08x %08x %08x", packet.Unknown1, packet.Unknown2, packet.Unknown3)
+	
+	// Create and register Bishop session
+	sessionID := clientAddr // Use client address as session ID for now
+	session := &BishopSession{
+		ID:           sessionID,
+		Conn:         conn,
+		StartTime:    time.Now(),
+		LastActivity: time.Now(),
+		BishopID:     packet.BishopID,
+	}
+	
+	h.sessionMutex.Lock()
+	h.bishopSessions[sessionID] = session
+	h.sessionMutex.Unlock()
+	
+	defer func() {
+		// Clean up session when connection ends
+		h.sessionMutex.Lock()
+		delete(h.bishopSessions, sessionID)
+		h.sessionMutex.Unlock()
+		log.Printf("[Protocol] Bishop session %s cleaned up", sessionID)
+	}()
 	
 	// Send Bishop authentication response
 	response := CreateBishopResponse(0) // 0 = success
@@ -104,48 +149,80 @@ func (h *Handler) handleBishopConnection(conn net.Conn, packet *BishopLoginPacke
 	log.Printf("[Protocol] Sent %d bytes Bishop response to %s", len(response), clientAddr)
 	log.Printf("[Protocol] Response data: %x", response)
 	
-	// For Bishop connections, keep the connection alive and handle additional packets
-	log.Printf("[Protocol] Bishop connection established, keeping connection alive for %s", clientAddr)
+	// Bishop session established
+	log.Printf("[Protocol] Bishop session %s established, managing connection for %s", sessionID, clientAddr)
 	
-	// Bishop connections may expect additional handshake or ongoing communication
-	// Keep reading for additional packets
+	// Bishop connections require persistent session management
+	// Keep reading for additional packets and handle session state
 	buffer := make([]byte, 4096)
-	for {
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second)) // 30 second timeout
+	sessionActive := true
+	
+	for sessionActive {
+		// Set a longer timeout for Bishop sessions - they may have periods of inactivity
+		conn.SetReadDeadline(time.Now().Add(5 * time.Minute)) // 5 minute timeout
 		n, err := conn.Read(buffer)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				log.Printf("[Protocol] Bishop connection timeout for %s", clientAddr)
+				log.Printf("[Protocol] Bishop session %s timeout (no activity for 5 minutes)", sessionID)
 			} else {
-				log.Printf("[Protocol] Bishop connection closed by %s: %v", clientAddr, err)
+				log.Printf("[Protocol] Bishop session %s ended: %v", sessionID, err)
 			}
+			sessionActive = false
 			break
 		}
 		
 		if n > 0 {
+			// Update session activity
+			h.sessionMutex.Lock()
+			if sess, exists := h.bishopSessions[sessionID]; exists {
+				sess.LastActivity = time.Now()
+			}
+			h.sessionMutex.Unlock()
+			
 			data := buffer[:n]
-			log.Printf("[Protocol] Bishop follow-up packet from %s: %d bytes", clientAddr, n)
+			log.Printf("[Protocol] Bishop session %s packet: %d bytes", sessionID, n)
 			log.Printf("[Protocol] Data: %x", data)
 			
-			// Parse and handle additional packets
-			followupPacket, err := ParsePacket(data)
+			// Parse and handle session packets
+			sessionPacket, err := ParsePacket(data)
 			if err != nil {
-				log.Printf("[Protocol] Error parsing Bishop follow-up packet: %v", err)
+				log.Printf("[Protocol] Error parsing Bishop session packet: %v", err)
+				// Don't break session for parsing errors, just log and continue
 				continue
 			}
 			
-			// Handle different packet types from Bishop
-			switch followupPacket.(type) {
+			// Handle different packet types during Bishop session
+			switch sp := sessionPacket.(type) {
 			case *BishopLoginPacket:
-				// Duplicate login - just ack again
-				conn.Write(CreateBishopResponse(0))
+				// Re-authentication request - respond with success
+				log.Printf("[Protocol] Bishop re-authentication in session %s", sessionID)
+				reAuthResponse := CreateBishopResponse(0)
+				_, err := conn.Write(reAuthResponse)
+				if err != nil {
+					log.Printf("[Protocol] Error sending Bishop re-auth response: %v", err)
+					sessionActive = false
+				}
+			case *UserLoginPacket:
+				// User login request via Bishop connection
+				log.Printf("[Protocol] User login via Bishop session %s", sessionID)
+				userResponse := h.handleUserLogin(sp, clientAddr)
+				if userResponse != nil {
+					_, err := conn.Write(userResponse)
+					if err != nil {
+						log.Printf("[Protocol] Error sending user login response via Bishop: %v", err)
+						sessionActive = false
+					}
+				}
 			default:
-				log.Printf("[Protocol] Unknown Bishop packet type, ignoring")
+				log.Printf("[Protocol] Unknown packet type in Bishop session %s, sending ACK", sessionID)
+				// Send a simple acknowledgment for unknown packets
+				ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
+				conn.Write(ackResponse)
 			}
 		}
 	}
 	
-	log.Printf("[Protocol] Bishop connection handler ending for %s", clientAddr)
+	log.Printf("[Protocol] Bishop session %s ended", sessionID)
 }
 
 func (h *Handler) handleBishopLogin(packet *BishopLoginPacket, clientAddr string) []byte {
@@ -223,4 +300,22 @@ func (h *Handler) HandlePing(conn net.Conn) {
 	// Simple ping response - just echo back
 	response := []byte{0x01, 0x00, 0x00, 0x00} // Simple ping response
 	conn.Write(response)
+}
+
+// GetActiveBishopSessions returns information about active Bishop sessions
+func (h *Handler) GetActiveBishopSessions() map[string]*BishopSession {
+	h.sessionMutex.RLock()
+	defer h.sessionMutex.RUnlock()
+	
+	sessions := make(map[string]*BishopSession)
+	for id, session := range h.bishopSessions {
+		sessions[id] = &BishopSession{
+			ID:           session.ID,
+			StartTime:    session.StartTime,
+			LastActivity: session.LastActivity,
+			BishopID:     session.BishopID,
+			// Don't copy the connection object for safety
+		}
+	}
+	return sessions
 }
