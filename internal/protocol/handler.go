@@ -39,8 +39,18 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	clientAddr := conn.RemoteAddr().String()
 	log.Printf("[Protocol] New connection from %s", clientAddr)
 	
-	// Don't send security key immediately - wait to see what type of client this is
-	// Read the first packet to determine client type
+	// Send security key immediately - Bishop expects this on connection (from working JavaScript implementation)
+	log.Printf("[Protocol] Sending security key immediately to %s (Bishop requirement)", clientAddr)
+	securityKeyPacket := h.createSecurityKeyPacket()
+	_, err := conn.Write(securityKeyPacket)
+	if err != nil {
+		log.Printf("[Protocol] Failed to send security key to %s: %v", clientAddr, err)
+		conn.Close()
+		return
+	}
+	log.Printf("[Protocol] Security key sent to %s", clientAddr)
+	
+	// Now read incoming packets and handle them
 	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
@@ -55,15 +65,8 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	
 	// Handle different packet lengths and types
 	if n == 127 {
-		// Bishop packet - send security key first, then handle
-		log.Printf("[Protocol] Bishop connection detected, sending security key")
-		securityKeyPacket := h.createSecurityKeyPacket()
-		_, err := conn.Write(securityKeyPacket)
-		if err != nil {
-			log.Printf("[Protocol] Failed to send security key to %s: %v", clientAddr, err)
-			conn.Close()
-			return
-		}
+		// Bishop packet - handle with persistent session
+		log.Printf("[Protocol] Bishop connection detected")
 		h.handleBishopPacket(conn, data, clientAddr)
 	} else if n == 229 {
 		// Player login packet (original 0x42FF format)
@@ -119,8 +122,6 @@ func (h *Handler) createSecurityKeyPacket() []byte {
 }
 
 func (h *Handler) handleBishopPacket(conn net.Conn, data []byte, clientAddr string) {
-	defer conn.Close() // Ensure connection is closed when this function exits
-	
 	log.Printf("[Protocol] Bishop packet received: %d bytes", len(data))
 	log.Printf("[Protocol] First 8 bytes: %x", data[:8])
 	
@@ -129,7 +130,7 @@ func (h *Handler) handleBishopPacket(conn net.Conn, data []byte, clientAddr stri
 		protocol := binary.LittleEndian.Uint16(data[2:4])
 		log.Printf("[Protocol] 127-byte Bishop packet, protocol: 0x%x", protocol)
 		
-		// From PCAP: Working response is exactly 53 bytes: 3500 9744 6137 cc16...
+		// From working JavaScript implementation: exact PCAP response 53 bytes
 		response := []byte{
 			0x35, 0x00,   // Size: 53 bytes
 			0x97, 0x44,   // Protocol response
@@ -145,15 +146,17 @@ func (h *Handler) handleBishopPacket(conn net.Conn, data []byte, clientAddr stri
 		_, err := conn.Write(response)
 		if err != nil {
 			log.Printf("[Protocol] Failed to send Bishop response to %s: %v", clientAddr, err)
+			conn.Close()
 			return
 		}
 		log.Printf("[Protocol] Sent exact PCAP response: %d bytes", len(response))
 		log.Printf("[Protocol] Response matches working PCAP capture exactly - should pass all Bishop checks")
 		
-		// Keep connection alive for more packets
+		// Keep connection alive for more packets - Bishop needs persistent session
 		h.handleBishopSession(conn, clientAddr)
 	} else {
 		log.Printf("[Protocol] Unexpected Bishop packet length: %d", len(data))
+		conn.Close()
 	}
 }
 
@@ -183,7 +186,7 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 			
 			// Handle different packet types during Bishop session
 			if n == 127 {
-				// Re-authentication or other Bishop commands
+				// Re-authentication or other Bishop commands - use same response
 				log.Printf("[Protocol] Bishop re-authentication in session %s", clientAddr)
 				response := []byte{
 					0x35, 0x00, 0x97, 0x44,
@@ -195,6 +198,11 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 					0x00, 0xfb, 0x40, 0xa1, 0x99, 0x32, 0xca, 0x39, 0xdb,
 				}
 				conn.Write(response)
+			} else if n == 7 {
+				// Short Bishop packets - likely ping or simple commands
+				log.Printf("[Protocol] Short Bishop packet in session %s, sending ACK", clientAddr)
+				ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK
+				conn.Write(ackResponse)
 			} else {
 				log.Printf("[Protocol] Unknown packet type in Bishop session %s, sending ACK", clientAddr)
 				// Send a simple acknowledgment for unknown packets
@@ -204,7 +212,8 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 		}
 	}
 	
-	log.Printf("[Protocol] Bishop session %s ended", clientAddr)
+	log.Printf("[Protocol] Bishop session %s ended, closing connection", clientAddr)
+	conn.Close()
 }
 
 func (h *Handler) handleBishopConnection(conn net.Conn, packet *BishopLoginPacket, clientAddr string) {
