@@ -198,6 +198,42 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 					0x00, 0xfb, 0x40, 0xa1, 0x99, 0x32, 0xca, 0x39, 0xdb,
 				}
 				conn.Write(response)
+			} else if n == 227 {
+				// Game client login packet during Bishop session
+				log.Printf("[Protocol] Game login packet in Bishop session %s", clientAddr)
+				packet, err := ParsePacket(data)
+				if err != nil {
+					log.Printf("[Protocol] Error parsing game packet in Bishop session: %v", err)
+					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
+					conn.Write(ackResponse)
+				} else if p, ok := packet.(*GameLoginPacket); ok {
+					response := h.handleGameLogin(p, clientAddr)
+					if response != nil {
+						conn.Write(response)
+					}
+				} else {
+					log.Printf("[Protocol] Failed to cast to GameLoginPacket in Bishop session")
+					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
+					conn.Write(ackResponse)
+				}
+			} else if n == 229 {
+				// User login packet during Bishop session
+				log.Printf("[Protocol] User login packet in Bishop session %s", clientAddr)
+				packet, err := ParsePacket(data)
+				if err != nil {
+					log.Printf("[Protocol] Error parsing user packet in Bishop session: %v", err)
+					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
+					conn.Write(ackResponse)
+				} else if p, ok := packet.(*UserLoginPacket); ok {
+					response := h.handleUserLogin(p, clientAddr)
+					if response != nil {
+						conn.Write(response)
+					}
+				} else {
+					log.Printf("[Protocol] Failed to cast to UserLoginPacket in Bishop session")
+					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
+					conn.Write(ackResponse)
+				}
 			} else if n == 7 {
 				// Short Bishop packets - likely ping or simple commands
 				log.Printf("[Protocol] Short Bishop packet in session %s, sending ACK", clientAddr)
