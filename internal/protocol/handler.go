@@ -242,6 +242,24 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
 					conn.Write(ackResponse)
 				}
+			} else if n == 47 {
+				// Session confirmation packet (0x14ff) - comes after player identity verification
+				log.Printf("[Protocol] Session confirmation packet in Bishop session %s", clientAddr)
+				packet, err := ParsePacket(data)
+				if err != nil {
+					log.Printf("[Protocol] Error parsing session confirmation packet: %v", err)
+					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
+					conn.Write(ackResponse)
+				} else if p, ok := packet.(*SessionConfirmPacket); ok {
+					response := h.handleSessionConfirm(p, clientAddr)
+					if response != nil {
+						conn.Write(response)
+					}
+				} else {
+					log.Printf("[Protocol] Failed to cast to SessionConfirmPacket in Bishop session")
+					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
+					conn.Write(ackResponse)
+				}
 			} else if n == 7 {
 				// Short Bishop packets - likely ping or simple commands
 				log.Printf("[Protocol] Short Bishop packet in session %s, sending ACK", clientAddr)
@@ -467,6 +485,18 @@ func (h *Handler) handlePlayerIdentityVerification(packet *GameLoginPacket, clie
 	
 	log.Printf("[Protocol] Sending exact PCAP player identity verification response: %d bytes", len(response))
 	log.Printf("[Protocol] Response protocol: 0x%x (should be 0xa8ff)", uint16(response[3])<<8|uint16(response[2]))
+	
+	return response
+}
+
+func (h *Handler) handleSessionConfirm(packet *SessionConfirmPacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Session confirmation from %s", clientAddr)
+	log.Printf("[Protocol] Protocol: 0x%x, Size: %d", packet.Header.Type, packet.Header.Size)
+	log.Printf("[Protocol] Session data (%d bytes): %x", len(packet.Data), packet.Data)
+	
+	// Create session confirmation response
+	response := CreateSessionConfirmResponse()
+	log.Printf("[Protocol] Sending session confirmation response: %d bytes", len(response))
 	
 	return response
 }

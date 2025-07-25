@@ -24,6 +24,9 @@ const (
 	PacketTypeGameLoginAlt   PacketType = 0xe0ff  // Alternative game login format from actual game client
 	PacketTypeGameResponse   PacketType = 0x00FE  // Protocol 254 - game response
 	
+	// Session/Follow-up packets
+	PacketTypeSessionConfirm PacketType = 0x14ff  // 47-byte session confirmation packet after player identity verification
+	
 	// Account management packets (inferred from JX2 system)
 	PacketTypeUserLogout     PacketType = 0x0001
 	PacketTypeUserVerify     PacketType = 0x0002
@@ -60,16 +63,22 @@ type BishopLoginPacket struct {
 	BishopID [16]byte // Bishop identifier or auth data
 }
 
-// GameLoginPacket represents game client login verification packet
-type GameLoginPacket struct {
-	Header ExtendedPacketHeader
-	Data   []byte // Game login data
-}
-
 // UserLoginPacket represents user login request (encrypted)
 type UserLoginPacket struct {
 	Header PacketHeader
 	EncryptedData []byte // XOR encrypted login data
+}
+
+// SessionConfirmPacket represents session confirmation packet (47 bytes)
+type SessionConfirmPacket struct {
+	Header PacketHeader
+	Data   []byte // Session confirmation data
+}
+
+// GameLoginPacket represents game client login verification packet
+type GameLoginPacket struct {
+	Header ExtendedPacketHeader
+	Data   []byte // Game login data
 }
 
 // LoginResponse represents login response
@@ -77,12 +86,6 @@ type LoginResponse struct {
 	Header PacketHeader
 	Result uint8    // Login result: 0=success, 1=failed, etc.
 	Data   []byte   // Additional response data
-}
-
-// CoinQueryPacket represents coin balance query
-type CoinQueryPacket struct {
-	Header PacketHeader
-	Username [32]byte // Username for coin query
 }
 
 // CoinUpdatePacket represents coin balance update
@@ -131,6 +134,8 @@ func ParsePacket(data []byte) (interface{}, error) {
 		return parseUserLoginPacket(data)
 	case PacketTypeGameLogin, PacketTypeGameLoginAlt:
 		return parseGameLoginPacket(data)
+	case PacketTypeSessionConfirm:
+		return parseSessionConfirmPacket(data)
 	default:
 		return nil, fmt.Errorf("unknown packet type: 0x%04X", header.Type)
 	}
@@ -197,6 +202,25 @@ func parseGameLoginPacket(data []byte) (*GameLoginPacket, error) {
 	return packet, nil
 }
 
+func parseSessionConfirmPacket(data []byte) (*SessionConfirmPacket, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("session confirm packet too short")
+	}
+
+	packet := &SessionConfirmPacket{}
+	buf := bytes.NewReader(data)
+	
+	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
+		return nil, err
+	}
+
+	// Rest is session confirmation data
+	packet.Data = make([]byte, len(data)-4)
+	copy(packet.Data, data[4:])
+
+	return packet, nil
+}
+
 func parseUserLoginPacket(data []byte) (*UserLoginPacket, error) {
 	if len(data) < 4 {
 		return nil, fmt.Errorf("user login packet too short")
@@ -249,6 +273,23 @@ func CreateBishopResponse(result uint8) []byte {
 	copy(responseData[4:], []byte("PAYSYS_OK")) // Status message
 	
 	buf.Write(responseData)
+	return buf.Bytes()
+}
+
+// CreateSessionConfirmResponse creates a session confirmation response
+func CreateSessionConfirmResponse() []byte {
+	// Create a simple success response for session confirmation
+	// Based on pattern of other successful responses, using a small response
+	header := PacketHeader{
+		Size: 6, // header(4) + result(1) + padding(1)
+		Type: PacketType(0x15ff), // Response type (incrementing from request 0x14ff)
+	}
+
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, header)
+	binary.Write(buf, binary.LittleEndian, uint8(0)) // Success
+	binary.Write(buf, binary.LittleEndian, uint8(0)) // Padding
+
 	return buf.Bytes()
 }
 
