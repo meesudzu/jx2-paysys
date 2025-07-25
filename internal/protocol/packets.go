@@ -21,6 +21,7 @@ const (
 	
 	// Game client protocol packets (with key field)
 	PacketTypeGameLogin      PacketType = 0x003E  // Protocol 62 - game client login verification
+	PacketTypeGameLoginAlt   PacketType = 0xe0ff  // Alternative game login format from actual game client
 	PacketTypeGameResponse   PacketType = 0x00FE  // Protocol 254 - game response
 	
 	// Account management packets (inferred from JX2 system)
@@ -128,7 +129,7 @@ func ParsePacket(data []byte) (interface{}, error) {
 		return parseBishopLoginPacket(data)
 	case PacketTypeUserLogin:
 		return parseUserLoginPacket(data)
-	case PacketTypeGameLogin:
+	case PacketTypeGameLogin, PacketTypeGameLoginAlt:
 		return parseGameLoginPacket(data)
 	default:
 		return nil, fmt.Errorf("unknown packet type: 0x%04X", header.Type)
@@ -253,16 +254,21 @@ func CreateBishopResponse(result uint8) []byte {
 
 // CreateGameResponse creates a game response packet with matching key
 func CreateGameResponse(key uint32, result uint8, data []byte) []byte {
+	// Based on Bishop logs, it expects "Protocol = 254; Size = 2; Key = X"
+	// This suggests a 2-byte payload (likely just a status code)
+	payload := make([]byte, 2)
+	payload[0] = result  // Status code
+	payload[1] = 0       // Reserved/padding
+	
 	header := ExtendedPacketHeader{
-		Size: uint16(8 + 1 + len(data)), // header(8) + result(1) + data
-		Type: PacketTypeGameResponse,     // Protocol 254
-		Key:  key,                       // Match the request key
+		Size: uint16(8 + len(payload)), // header(8) + payload(2) = 10 total
+		Type: PacketTypeGameResponse,    // Protocol 254
+		Key:  key,                      // Match the request key
 	}
 
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, header)
-	binary.Write(buf, binary.LittleEndian, result)
-	buf.Write(data)
-
+	buf.Write(payload)
+	
 	return buf.Bytes()
 }

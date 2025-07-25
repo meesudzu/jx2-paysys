@@ -402,10 +402,21 @@ func (h *Handler) handleGameLogin(packet *GameLoginPacket, clientAddr string) []
 	
 	log.Printf("[Protocol] Game login verification successful for %s", clientAddr)
 	
-	// Create minimal response with matching key (protocol 254, size 2, key matching request)
+	// For packet type 0xe0ff, Bishop expects a specific response format
+	// Based on Bishop logs: "Protocol = 254; Size = 2; Key = 1"
+	// But the parsed key from 0xe0ff packets doesn't match Bishop's expectation
+	// So we use a fixed key of 1 for this packet type
+	responseKey := uint32(1)
+	if packet.Header.Type == 0xe0ff {
+		log.Printf("[Protocol] Using fixed key=1 for packet type 0xe0ff (Bishop compatibility)")
+	} else {
+		responseKey = packet.Header.Key
+	}
+	
+	// Create minimal response with matching key (protocol 254, size 2, key matching request)  
 	// This matches the expected "Protocol = 254; Size = 2; Key = 1" format from the error log
-	response := CreateGameResponse(packet.Header.Key, 0, []byte{}) // Success with no additional data
-	log.Printf("[Protocol] Sending game response: Protocol=%d, Size=%d, Key=%d", PacketTypeGameResponse, len(response), packet.Header.Key)
+	response := CreateGameResponse(responseKey, 0, []byte{}) // Success with no additional data
+	log.Printf("[Protocol] Sending game response: Protocol=%d, Size=%d, Key=%d", PacketTypeGameResponse, len(response), responseKey)
 	
 	return response
 }
