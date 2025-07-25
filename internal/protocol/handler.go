@@ -217,20 +217,28 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 					conn.Write(ackResponse)
 				}
 			} else if n == 229 {
-				// User login packet during Bishop session
-				log.Printf("[Protocol] User login packet in Bishop session %s", clientAddr)
+				// 229-byte packet during Bishop session - could be user login (0x42ff) or player identity verification (0xe0ff)
 				packet, err := ParsePacket(data)
 				if err != nil {
-					log.Printf("[Protocol] Error parsing user packet in Bishop session: %v", err)
+					log.Printf("[Protocol] Error parsing 229-byte packet in Bishop session: %v", err)
 					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
 					conn.Write(ackResponse)
 				} else if p, ok := packet.(*UserLoginPacket); ok {
+					// Protocol 0x42ff - traditional user login
+					log.Printf("[Protocol] User login packet (0x42ff) in Bishop session %s", clientAddr)
 					response := h.handleUserLogin(p, clientAddr)
 					if response != nil {
 						conn.Write(response)
 					}
+				} else if p, ok := packet.(*GameLoginPacket); ok {
+					// Protocol 0xe0ff - player identity verification (matches JavaScript implementation)
+					log.Printf("[Protocol] Player identity verification packet (0xe0ff) in Bishop session %s", clientAddr)
+					response := h.handlePlayerIdentityVerification(p, clientAddr)
+					if response != nil {
+						conn.Write(response)
+					}
 				} else {
-					log.Printf("[Protocol] Failed to cast to UserLoginPacket in Bishop session")
+					log.Printf("[Protocol] Failed to cast 229-byte packet to known type in Bishop session")
 					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
 					conn.Write(ackResponse)
 				}
@@ -417,6 +425,48 @@ func (h *Handler) handleGameLogin(packet *GameLoginPacket, clientAddr string) []
 	// This matches the expected "Protocol = 254; Size = 2; Key = 1" format from the error log
 	response := CreateGameResponse(responseKey, 0, []byte{}) // Success with no additional data
 	log.Printf("[Protocol] Sending game response: Protocol=%d, Size=%d, Key=%d", PacketTypeGameResponse, len(response), responseKey)
+	
+	return response
+}
+
+func (h *Handler) handlePlayerIdentityVerification(packet *GameLoginPacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Player identity verification from %s", clientAddr)
+	log.Printf("[Protocol] Protocol: 0x%x, Size: %d", packet.Header.Type, packet.Header.Size)
+	log.Printf("[Protocol] Full packet data: %x", packet.Data)
+	
+	// Based on working JavaScript implementation - this is for protocol 0xe0ff packets
+	// Should respond with exact PCAP format: 169 bytes with protocol 0xa8ff
+	
+	// Create exact response matching PCAP: 169 bytes with Protocol 0xa8ff  
+	response := []byte{
+		// Header: a900 ffa8 (169 bytes, protocol 0xa8ff)
+		0xa9, 0x00, 0xff, 0xa8,
+		// Exact payload from PCAP
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xeb, 0x49, 0xc8,
+		0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+		0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+		0xe7, 0x50, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+		0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+		0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+		0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+		0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+		0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+		0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xfa, 0xea, 0x49, 0xc8,
+		0xe7, 0x51, 0x81, 0xe7, 0xc2, 0x03, 0xb7, 0xa8,
+		0x57, 0x5c, 0x67, 0x61, 0xc1,
+	}
+	
+	log.Printf("[Protocol] Sending exact PCAP player identity verification response: %d bytes", len(response))
+	log.Printf("[Protocol] Response protocol: 0x%x (should be 0xa8ff)", uint16(response[3])<<8|uint16(response[2]))
 	
 	return response
 }
