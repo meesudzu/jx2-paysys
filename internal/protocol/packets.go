@@ -114,7 +114,19 @@ func ParsePacket(data []byte) (interface{}, error) {
 		return nil, fmt.Errorf("packet too short")
 	}
 
-	// Read header
+	// For packets that have keys (game packets), we need to read the extended header first
+	// Let's check the protocol type to determine the header format
+	protocol := binary.LittleEndian.Uint16(data[2:4])
+	
+	// Protocol 62 (0x003E) and 0xe0ff are game packets with extended headers (8 bytes)
+	if protocol == 0x003E || protocol == 0xe0ff {
+		if len(data) < 8 {
+			return nil, fmt.Errorf("game packet too short for extended header")
+		}
+		return parseGameLoginPacket(data)
+	}
+
+	// Other packets use basic header (4 bytes)
 	var header PacketHeader
 	buf := bytes.NewReader(data)
 	if err := binary.Read(buf, binary.LittleEndian, &header); err != nil {
@@ -132,8 +144,6 @@ func ParsePacket(data []byte) (interface{}, error) {
 		return parseBishopLoginPacket(data)
 	case PacketTypeUserLogin:
 		return parseUserLoginPacket(data)
-	case PacketTypeGameLogin, PacketTypeGameLoginAlt:
-		return parseGameLoginPacket(data)
 	case PacketTypeSessionConfirm:
 		return parseSessionConfirmPacket(data)
 	default:
@@ -191,6 +201,7 @@ func parseGameLoginPacket(data []byte) (*GameLoginPacket, error) {
 	packet := &GameLoginPacket{}
 	buf := bytes.NewReader(data)
 	
+	// Game login packets use ExtendedPacketHeader (with key field)
 	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
 		return nil, err
 	}
@@ -295,8 +306,9 @@ func CreateSessionConfirmResponse() []byte {
 
 // CreateGameResponse creates a game response packet with matching key
 func CreateGameResponse(key uint32, result uint8, data []byte) []byte {
-	// Based on Bishop logs, it expects "Protocol = 254; Size = 2; Key = X"
-	// This suggests a 2-byte payload (likely just a status code)
+	// Based on Bishop logs expecting "Protocol = 254; Size = 2; Key = X"
+	// Size = 2 means 2-byte payload, so total packet = header(8) + payload(2) = 10 bytes
+	
 	payload := make([]byte, 2)
 	payload[0] = result  // Status code
 	payload[1] = 0       // Reserved/padding
