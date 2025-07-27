@@ -25,3 +25,19 @@ pids/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Build artifacts
+obj/
+bin/
+build/
+*.o
+*.exe
+*.out
+*.so
+*.dylib
+*.dll
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
