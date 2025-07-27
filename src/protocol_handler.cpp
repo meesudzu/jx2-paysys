@@ -65,17 +65,38 @@ std::vector<uint8_t> ProtocolHandler::ProcessMessage(const std::vector<uint8_t>&
 }
 
 std::vector<uint8_t> ProtocolHandler::CreateSecurityHandshake() {
-    // Create a simple security handshake that the Bishop client expects
-    // Based on JX2 payment system protocol analysis and the fact that the client is still 
-    // failing at _RecvSecurityKey, we need to try a different approach
+    // Based on PCAP analysis, the Bishop client expects a specific 34-byte handshake format:
+    // Bytes 0-1: 0x22 0x00 (message type/header)
+    // Bytes 2-3: 0x20 0x00 (possibly length field) 
+    // Bytes 4-9: 0x00 padding
+    // Bytes 10-31: Security key data (22 bytes)
+    // Bytes 32-33: 0x00 padding
     
     std::vector<uint8_t> handshake;
     
-    // Try a longer security key - often JX2 servers send a 64-byte or 128-byte key
-    // The client might be expecting a specific size
-    for (int i = 0; i < 64; i++) {
-        handshake.push_back(static_cast<uint8_t>(i + 1));
+    // Header: 22 00 20 00 00 00 00 00 00 00
+    handshake.push_back(0x22);  // Message type
+    handshake.push_back(0x00);
+    handshake.push_back(0x20);  // Length or type field
+    handshake.push_back(0x00);
+    for (int i = 0; i < 6; i++) {
+        handshake.push_back(0x00);  // Padding
     }
+    
+    // Security key data (22 bytes) - use pattern from original server
+    uint8_t key_data[] = {
+        0xf5, 0x4d, 0x3f, 0xc9, 0x5a, 0xcf, 0xb2, 0x5e,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    
+    for (int i = 0; i < 22; i++) {
+        handshake.push_back(key_data[i]);
+    }
+    
+    // Final padding (2 bytes)
+    handshake.push_back(0x00);
+    handshake.push_back(0x00);
     
     return handshake;
 }
