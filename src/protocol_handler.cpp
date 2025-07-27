@@ -18,6 +18,19 @@ std::vector<uint8_t> ProtocolHandler::ProcessMessage(const std::vector<uint8_t>&
     // Decrypt the message if needed
     std::vector<uint8_t> decrypted_data = DecryptMessage(raw_data);
     
+    // Debug: print both raw and decrypted data
+    std::cout << "Raw data: ";
+    for (size_t i = 0; i < std::min(raw_data.size(), static_cast<size_t>(16)); ++i) {
+        printf("%02x ", raw_data[i]);
+    }
+    std::cout << std::endl;
+    
+    std::cout << "Decrypted: ";
+    for (size_t i = 0; i < std::min(decrypted_data.size(), static_cast<size_t>(16)); ++i) {
+        printf("%02x ", decrypted_data[i]);
+    }
+    std::cout << std::endl;
+    
     // Parse the protocol message
     ProtocolMessage message = ParseMessage(decrypted_data);
     
@@ -56,7 +69,9 @@ std::vector<uint8_t> ProtocolHandler::ProcessMessage(const std::vector<uint8_t>&
             response = HandlePing(message.data, client_ip);
             break;
         default:
-            std::cerr << "Unknown message type received from " << client_ip << std::endl;
+            std::cerr << "Unknown message type received from " << client_ip 
+                      << " (type: 0x" << std::hex << static_cast<uint32_t>(message.type) << std::dec << ")"
+                      << std::endl;
             return {};
     }
     
@@ -65,38 +80,28 @@ std::vector<uint8_t> ProtocolHandler::ProcessMessage(const std::vector<uint8_t>&
 }
 
 std::vector<uint8_t> ProtocolHandler::CreateSecurityHandshake() {
-    // Based on PCAP analysis, the Bishop client expects a specific 34-byte handshake format:
-    // Bytes 0-1: 0x22 0x00 (message type/header)
-    // Bytes 2-3: 0x20 0x00 (possibly length field) 
-    // Bytes 4-9: 0x00 padding
-    // Bytes 10-31: Security key data (22 bytes)
-    // Bytes 32-33: 0x00 padding
+    // Based on PCAP analysis of working server, use a pattern that generates proper XOR keys
+    // From player-login.pcap: 22 00 20 00 97 3a b6 fc 43 46 8a fa 85 25 9b 5d 75 15 ae 35 48 46 b6 f6 43 45 67 1d fd 1c 8c d7 1b 96
     
     std::vector<uint8_t> handshake;
     
-    // Header: 22 00 20 00 00 00 00 00 00 00
+    // Header: 22 00 20 00 (same format as before)
     handshake.push_back(0x22);  // Message type
     handshake.push_back(0x00);
     handshake.push_back(0x20);  // Length or type field
     handshake.push_back(0x00);
-    for (int i = 0; i < 6; i++) {
-        handshake.push_back(0x00);  // Padding
-    }
     
-    // Security key data (22 bytes) - use pattern from original server
+    // Security key data from working capture (30 bytes)
     uint8_t key_data[] = {
-        0xf5, 0x4d, 0x3f, 0xc9, 0x5a, 0xcf, 0xb2, 0x5e,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        0x97, 0x3a, 0xb6, 0xfc, 0x43, 0x46, 0x8a, 0xfa,
+        0x85, 0x25, 0x9b, 0x5d, 0x75, 0x15, 0xae, 0x35,
+        0x48, 0x46, 0xb6, 0xf6, 0x43, 0x45, 0x67, 0x1d,
+        0xfd, 0x1c, 0x8c, 0xd7, 0x1b, 0x96
     };
     
-    for (int i = 0; i < 22; i++) {
+    for (int i = 0; i < 30; i++) {
         handshake.push_back(key_data[i]);
     }
-    
-    // Final padding (2 bytes)
-    handshake.push_back(0x00);
-    handshake.push_back(0x00);
     
     return handshake;
 }
@@ -303,13 +308,41 @@ uint32_t ProtocolHandler::GetClientIP(const std::string& client_ip) {
 
 // Simple XOR encryption for now (based on typical game server patterns)
 std::vector<uint8_t> ProtocolHandler::DecryptMessage(const std::vector<uint8_t>& encrypted_data) {
-    // For now, assume no encryption or simple XOR
-    // This would need to be implemented based on reverse engineering of the original
-    return encrypted_data;
+    // Based on PCAP analysis, try using the first 4 bytes of security key as XOR pattern
+    // My security key starts with: 97 3a b6 fc
+    // Client sends: 7f 00 97 75
+    // Try XOR: 7f^97=e8, 00^3a=3a, 97^b6=21, 75^fc=89 -> e8 3a 21 89
+    // That's still not 01 00 00 00. Let me try reverse approach.
+    
+    if (encrypted_data.empty()) {
+        return encrypted_data;
+    }
+    
+    std::vector<uint8_t> decrypted_data = encrypted_data;
+    
+    // If client sends 7f 00 97 75 and this should be 01 00 00 00, then:
+    // XOR pattern = {7f^01, 00^00, 97^00, 75^00} = {7e, 00, 97, 75}
+    uint8_t xor_pattern[] = {0x7e, 0x00, 0x97, 0x75};
+    
+    for (size_t i = 0; i < decrypted_data.size(); ++i) {
+        decrypted_data[i] ^= xor_pattern[i % 4];
+    }
+    
+    return decrypted_data;
 }
 
 std::vector<uint8_t> ProtocolHandler::EncryptMessage(const std::vector<uint8_t>& plain_data) {
-    // For now, assume no encryption or simple XOR
-    // This would need to be implemented based on reverse engineering of the original
-    return plain_data;
+    // Use same XOR pattern for encryption as decryption
+    if (plain_data.empty()) {
+        return plain_data;
+    }
+    
+    std::vector<uint8_t> encrypted_data = plain_data;
+    uint8_t xor_pattern[] = {0x7e, 0x00, 0x97, 0x75};
+    
+    for (size_t i = 0; i < encrypted_data.size(); ++i) {
+        encrypted_data[i] ^= xor_pattern[i % 4];
+    }
+    
+    return encrypted_data;
 }
