@@ -205,6 +205,19 @@ void PaysysServer::AcceptClients() {
 }
 
 void PaysysServer::HandleClient(std::unique_ptr<ClientConnection> client) {
+    // Send initial security handshake/greeting to client immediately upon connection
+    // The Bishop client expects to receive this first (_RecvSecurityKey)
+    // Let's try a simple 4-byte acknowledgment that's common in JX2 servers
+    std::vector<uint8_t> security_ack = {0x00, 0x00, 0x00, 0x01}; // Simple "OK" response
+    
+    if (!client->SendData(security_ack)) {
+        std::cerr << "Failed to send security ack to client " << client->GetIPAddress() << std::endl;
+        return;
+    }
+    std::cout << "Sent security ack to client " << client->GetIPAddress() << std::endl;
+    
+    std::cout << "Client " << client->GetIPAddress() << " connected, waiting for data..." << std::endl;
+    
     while (running_ && client->IsConnected()) {
         // Receive data from client
         std::vector<uint8_t> received_data = client->ReceiveData();
@@ -213,6 +226,14 @@ void PaysysServer::HandleClient(std::unique_ptr<ClientConnection> client) {
             // Client disconnected or error
             break;
         }
+        
+        // Log the received data for debugging
+        std::cout << "Received " << received_data.size() << " bytes from " << client->GetIPAddress() << std::endl;
+        std::cout << "Data: ";
+        for (size_t i = 0; i < std::min(received_data.size(), static_cast<size_t>(32)); ++i) {
+            printf("%02x ", received_data[i]);
+        }
+        std::cout << std::endl;
         
         // Process the received data through protocol handler
         std::vector<uint8_t> response = protocol_handler_.ProcessMessage(received_data, client->GetIPAddress());

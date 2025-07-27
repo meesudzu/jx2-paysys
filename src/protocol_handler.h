@@ -36,6 +36,7 @@ public:
     ~ProtocolHandler();
     
     std::vector<uint8_t> ProcessMessage(const std::vector<uint8_t>& raw_data, const std::string& client_ip);
+    std::vector<uint8_t> CreateSecurityHandshake();
     
 private:
     const ConfigManager& config_;

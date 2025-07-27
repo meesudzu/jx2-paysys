@@ -64,6 +64,22 @@ std::vector<uint8_t> ProtocolHandler::ProcessMessage(const std::vector<uint8_t>&
     return EncryptMessage(response);
 }
 
+std::vector<uint8_t> ProtocolHandler::CreateSecurityHandshake() {
+    // Create a simple security handshake that the Bishop client expects
+    // Based on JX2 payment system protocol analysis and the fact that the client is still 
+    // failing at _RecvSecurityKey, we need to try a different approach
+    
+    std::vector<uint8_t> handshake;
+    
+    // Try a longer security key - often JX2 servers send a 64-byte or 128-byte key
+    // The client might be expecting a specific size
+    for (int i = 0; i < 64; i++) {
+        handshake.push_back(static_cast<uint8_t>(i + 1));
+    }
+    
+    return handshake;
+}
+
 ProtocolMessage ProtocolHandler::ParseMessage(const std::vector<uint8_t>& raw_data) {
     if (raw_data.size() < 4) {
         return ProtocolMessage();
