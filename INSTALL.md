@@ -4,21 +4,18 @@
 
 ### Option 1: Use the Pre-compiled Static Binary (Recommended)
 
-The repository includes a statically-linked binary that includes the MySQL client library embedded, reducing dependency issues:
+The repository includes a fully statically-linked binary with all dependencies embedded:
 
 ```bash
 # Run the payment system server
 ./bin/paysys
 ```
 
-This binary only requires these common system libraries:
-- `libssl.so.3` (OpenSSL)
-- `libcrypto.so.3` (OpenSSL crypto)  
-- `libz.so.1` (zlib compression)
-- `libzstd.so.1` (zstd compression)
+This binary only requires these basic system libraries that are available on all Linux distributions:
 - `libc.so.6` (standard C library)
+- `/lib64/ld-linux-x86-64.so.2` (dynamic linker)
 
-These are typically available on most modern Linux distributions.
+All other dependencies (MySQL client, OpenSSL, zlib, zstd) are statically linked and embedded in the binary.
 
 ### Option 2: Install MySQL Client Library
 
@@ -131,18 +128,15 @@ cd bishop && ./KG_BishopD
 
 **Common Issues:**
 
-1. **"libmysqlclient.so.21: cannot open shared object file"**
-   - Use the static binary: `make static && ./bin/paysys`
-   - Or install MySQL client library as shown above
+1. **Binary execution issues**
+   - Make executable: `chmod +x bin/paysys`
+   - The static binary should work on most Linux distributions without additional dependencies
 
 2. **"Can't connect to MySQL server"**
    - Server will run in test mode without database
    - Check MySQL is running: `sudo systemctl status mysql`
    - Verify connection settings in paysys.ini
 
-3. **"Permission denied" when running binary**
-   - Make executable: `chmod +x bin/paysys`
-
-4. **Port 8000 already in use**
+3. **Port 8000 already in use**
    - Change port in paysys.ini: `port = 8001`
    - Or kill existing process: `sudo lsof -ti:8000 | xargs kill`

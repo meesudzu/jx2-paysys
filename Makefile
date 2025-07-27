@@ -4,7 +4,7 @@ INCLUDES = -I/usr/include/mysql
 LIBS = -lmysqlclient -lpthread
 
 # Static linking flags for portable binary
-STATIC_LIBS = -static-libgcc -static-libstdc++ /usr/lib/x86_64-linux-gnu/libmysqlclient.a -lssl -lcrypto -lresolv -lz -lzstd -lpthread -ldl -lm
+STATIC_LIBS = -static-libgcc -static-libstdc++ /usr/lib/x86_64-linux-gnu/libmysqlclient.a /usr/lib/x86_64-linux-gnu/libssl.a /usr/lib/x86_64-linux-gnu/libcrypto.a /usr/lib/x86_64-linux-gnu/libz.a /usr/lib/x86_64-linux-gnu/libzstd.a -lresolv -lpthread -ldl -lm
 
 SRCDIR = src
 OBJDIR = obj
