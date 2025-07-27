@@ -3,6 +3,9 @@ CXXFLAGS = -std=c++11 -Wall -Wextra -O2 -pthread
 INCLUDES = -I/usr/include/mysql
 LIBS = -lmysqlclient -lpthread
 
+# Static linking flags for portable binary
+STATIC_LIBS = -static-libgcc -static-libstdc++ /usr/lib/x86_64-linux-gnu/libmysqlclient.a -lssl -lcrypto -lresolv -lz -lzstd -lpthread -ldl -lm
+
 SRCDIR = src
 OBJDIR = obj
 BINDIR = bin
@@ -11,12 +14,17 @@ SOURCES = $(wildcard $(SRCDIR)/*.cpp)
 OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 TARGET = $(BINDIR)/paysys
 
-.PHONY: all clean install
+.PHONY: all clean install static
 
 all: $(TARGET)
 
+# Regular dynamic linking
 $(TARGET): $(OBJECTS) | $(BINDIR)
 	$(CXX) $(OBJECTS) -o $@ $(LIBS)
+
+# Static linking for portable binary
+static: $(OBJECTS) | $(BINDIR)
+	$(CXX) $(OBJECTS) -o $(TARGET) $(STATIC_LIBS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
@@ -50,7 +58,8 @@ test: $(TARGET)
 
 help:
 	@echo "Available targets:"
-	@echo "  all     - Build the payment system server"
+	@echo "  all     - Build the payment system server (dynamic linking)"
+	@echo "  static  - Build statically linked portable binary"
 	@echo "  clean   - Remove build files"
 	@echo "  debug   - Build with debug symbols"
 	@echo "  install - Install binary to current directory"
