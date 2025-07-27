@@ -207,14 +207,20 @@ void PaysysServer::AcceptClients() {
 void PaysysServer::HandleClient(std::unique_ptr<ClientConnection> client) {
     // Send initial security handshake/greeting to client immediately upon connection
     // The Bishop client expects to receive this first (_RecvSecurityKey)
-    // Let's try a simple 4-byte acknowledgment that's common in JX2 servers
-    std::vector<uint8_t> security_ack = {0x00, 0x00, 0x00, 0x01}; // Simple "OK" response
+    // Based on tcpdump analysis, client receives our data but expects more or different format
+    // Let's try a longer security key that matches typical JX2 patterns
+    std::vector<uint8_t> security_key;
     
-    if (!client->SendData(security_ack)) {
-        std::cerr << "Failed to send security ack to client " << client->GetIPAddress() << std::endl;
+    // Common JX2 server security key pattern - 16 bytes with recognizable pattern
+    for (int i = 0; i < 16; i++) {
+        security_key.push_back(static_cast<uint8_t>(0x55 + i)); // Pattern: 55 56 57 58...
+    }
+    
+    if (!client->SendData(security_key)) {
+        std::cerr << "Failed to send security key to client " << client->GetIPAddress() << std::endl;
         return;
     }
-    std::cout << "Sent security ack to client " << client->GetIPAddress() << std::endl;
+    std::cout << "Sent " << security_key.size() << "-byte security key to client " << client->GetIPAddress() << std::endl;
     
     std::cout << "Client " << client->GetIPAddress() << " connected, waiting for data..." << std::endl;
     
