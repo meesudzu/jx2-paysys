@@ -3,7 +3,9 @@
 
 #include <string>
 #include <memory>
+#ifndef NO_DATABASE
 #include <mysql/mysql.h>
+#endif
 #include "config_manager.h"
 
 struct AccountInfo {
@@ -43,14 +45,18 @@ public:
     bool Reconnect();
     
 private:
+#ifndef NO_DATABASE
     MYSQL* mysql_connection_;
+#endif
     std::string host_;
     std::string username_;
     std::string password_;
     std::string database_;
     
     bool ExecuteQuery(const std::string& query);
+#ifndef NO_DATABASE
     MYSQL_RES* ExecuteSelectQuery(const std::string& query);
+#endif
     std::string EscapeString(const std::string& input);
 };
 

@@ -1,5 +1,27 @@
 # Installation Guide for JX2 Payment System
 
+## Quick Start - GLIBC Compatibility Issues
+
+**If you're getting GLIBC version errors, see [COMPATIBILITY.md](COMPATIBILITY.md) for detailed solutions.**
+
+### Recommended Solution for Compatibility Issues
+
+Use the no-database version that has minimal dependencies:
+
+```bash
+# Build the compatible version
+make nodb
+
+# Run the server (only requires basic system libraries)
+./bin/paysys
+```
+
+This version:
+- Runs without MySQL dependencies
+- Works with older GLIBC versions
+- Includes test accounts (test/test, bishop/1234)
+- Fully compatible with Bishop client
+
 ## Binary Installation
 
 ### Option 1: Use the Pre-compiled Static Binary (Recommended)
@@ -78,6 +100,16 @@ make clean
 **Build with debug symbols:**
 ```bash
 make debug
+```
+
+**No-database version (maximum compatibility):**
+```bash
+make nodb
+```
+
+**Portable binary helper script:**
+```bash
+./build_portable.sh
 ```
 
 ## Configuration
