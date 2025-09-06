@@ -29,9 +29,17 @@ var (
 	globalResetPeriod         = 1 * time.Minute
 )
 
-// init loads any previously learned keys
+// init loads any previously learned keys asynchronously to prevent startup blocking
 func init() {
-	loadLearnedKeys()
+	// Load keys asynchronously to avoid blocking server startup
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[Encryption] Recovered from panic during async key loading: %v", r)
+			}
+		}()
+		loadLearnedKeys()
+	}()
 }
 
 // DecryptXOR performs XOR decryption on login data

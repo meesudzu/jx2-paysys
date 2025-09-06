@@ -51,8 +51,10 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 	}
 	log.Printf("[Protocol] Security key sent to %s", clientAddr)
 	
-	// Now read incoming packets and handle them
+	// Now read incoming packets and handle them with timeout
 	buffer := make([]byte, 4096)
+	// Set aggressive timeout for initial packet read to prevent hanging
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	n, err := conn.Read(buffer)
 	if err != nil {
 		log.Printf("[Protocol] Error reading packet from %s: %v", clientAddr, err)
@@ -207,12 +209,12 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 			break
 		}
 		
-		// Set shorter timeout for Bishop sessions to prevent hanging (reduced from 5 minutes to 2 minutes)
-		conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
+		// Set aggressive timeout for Bishop sessions to prevent hanging (reduced to 30 seconds)
+		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		n, err := conn.Read(buffer)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				log.Printf("[Protocol] Bishop session %s timeout (no activity for 2 minutes)", clientAddr)
+				log.Printf("[Protocol] Bishop session %s timeout (no activity for 30 seconds)", clientAddr)
 			} else {
 				log.Printf("[Protocol] Bishop session %s ended: %v", clientAddr, err)
 			}
