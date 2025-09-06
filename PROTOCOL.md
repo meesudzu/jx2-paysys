@@ -12,13 +12,28 @@ The JX2 paysys uses a TCP-based binary protocol with the following characteristi
 - **Encryption**: XOR cipher with fixed 16-byte key
 - **Packet Structure**: [Size:2][Type:2][Data:Variable]
 
-### XOR Encryption Key
+### XOR Encryption Keys
 
+The JX2 paysys protocol uses XOR encryption with multiple keys for different scenarios:
+
+#### Standard Key (16 bytes)
 ```
 45 73 77 29 2F DA 9A 21 10 52 B1 9C 70 93 0E A0
 ```
+Used for traditional admin/user logins. Successfully decrypts packets from `player-login.pcap`.
 
-This 16-byte key repeats for longer data blocks.
+#### Alternative Key (16 bytes)  
+```
+A5 AE C3 17 FB A5 AD AD 69 2B A7 9D 67 0C 51 0E
+```
+Discovered from `tester_1_create_character_and_login_game.pcap`. Auto-detected through repeating pattern analysis.
+
+#### Dynamic Key Detection
+
+The implementation includes automatic key detection:
+- Pattern-based extraction from repeating 16-byte chunks
+- Quality scoring to select the best decryption result
+- Fallback to known keys if auto-detection fails
 
 ### Packet Types
 
