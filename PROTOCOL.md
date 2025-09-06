@@ -14,26 +14,47 @@ The JX2 paysys uses a TCP-based binary protocol with the following characteristi
 
 ### XOR Encryption Keys
 
-The JX2 paysys protocol uses XOR encryption with multiple keys for different scenarios:
+The JX2 paysys protocol uses XOR encryption with multiple user-specific keys:
 
-#### Standard Key (16 bytes)
+#### Admin Key (16 bytes)
 ```
 45 73 77 29 2F DA 9A 21 10 52 B1 9C 70 93 0E A0
 ```
-Used for traditional admin/user logins. Successfully decrypts packets from `player-login.pcap`.
+Used for admin logins. Found in original `player-login.pcap`.
 
-#### Alternative Key (16 bytes)  
+#### Tester_1 Key (16 bytes)  
 ```
 A5 AE C3 17 FB A5 AD AD 69 2B A7 9D 67 0C 51 0E
 ```
-Discovered from `tester_1_create_character_and_login_game.pcap`. Auto-detected through repeating pattern analysis.
+Used for tester_1 logins. Found in `tester_1_create_character_and_login_game.pcap`.
 
-#### Dynamic Key Detection
+#### Tester_3 Key (16 bytes)
+```
+AD 69 2B A7 9D 67 0C 50 0E A5 AE C3 17 FB A5 AD
+```
+Used for tester_3 logins. Found in `tester_3_create_character_and_login_game.pcap`.
+This is a rotated variant of the tester_1 key.
 
-The implementation includes automatic key detection:
-- Pattern-based extraction from repeating 16-byte chunks
-- Quality scoring to select the best decryption result
-- Fallback to known keys if auto-detection fails
+#### Tester_4 Key (16 bytes)
+```
+47 E7 92 AF 28 DB 6E 54 EC F7 9B F7 B4 4D E1 63
+```
+Used for tester_4 logins. Found in `tester_4_create_character_and_login_game.pcap`.
+
+#### Character Creation Key (16 bytes)
+```
+63 D5 B8 D7 2B 9B 02 2A 5E C9 38 3F 79 66 50 DA
+```
+Used for character creation packets across multiple users.
+
+#### Multi-User Encryption System
+
+The protocol demonstrates that **different users have different XOR keys**. The implementation includes:
+
+- **Automatic Key Detection**: Pattern-based extraction from repeating 16-byte chunks
+- **Quality Scoring**: Evaluates decryption results to select the best key
+- **Fallback Mechanism**: Uses known keys if auto-detection fails  
+- **User-Specific Keys**: Each user account may have a unique encryption key
 
 ### Packet Types
 
@@ -226,10 +247,11 @@ Offset | Size | Field         | Description
 
 ### Security Considerations
 
-1. **Weak Encryption**: XOR with fixed key provides minimal security
-2. **MD5 Hashing**: Deprecated hash algorithm, vulnerable to collisions  
-3. **No TLS**: Protocol transmits encrypted credentials over plain TCP
-4. **Key Reuse**: Same XOR key used for all communications
+1. **Multi-User XOR Encryption**: Each user has a unique 16-byte XOR key
+2. **Key Reuse**: Same key used for all communications from the same user
+3. **MD5 Hashing**: Deprecated hash algorithm, vulnerable to collisions  
+4. **No TLS**: Protocol transmits encrypted credentials over plain TCP
+5. **Pattern Analysis**: XOR keys can be extracted through traffic analysis
 
 ### Testing
 
