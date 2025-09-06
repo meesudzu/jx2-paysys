@@ -196,14 +196,22 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 	
 	// Keep reading for additional packets and handle session state
 	buffer := make([]byte, 4096)
+	sessionStart := time.Now()
+	maxSessionDuration := 30 * time.Minute // Maximum session duration
 	
 	for {
-		// Set a longer timeout for Bishop sessions
-		conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
+		// Check if session has been running too long
+		if time.Since(sessionStart) > maxSessionDuration {
+			log.Printf("[Protocol] Bishop session %s exceeded maximum duration (%v), terminating", clientAddr, maxSessionDuration)
+			break
+		}
+		
+		// Set shorter timeout for Bishop sessions to prevent hanging (reduced from 5 minutes to 2 minutes)
+		conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 		n, err := conn.Read(buffer)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				log.Printf("[Protocol] Bishop session %s timeout (no activity for 5 minutes)", clientAddr)
+				log.Printf("[Protocol] Bishop session %s timeout (no activity for 2 minutes)", clientAddr)
 			} else {
 				log.Printf("[Protocol] Bishop session %s ended: %v", clientAddr, err)
 			}
@@ -529,8 +537,8 @@ func (h *Handler) handleUserLogin(packet *UserLoginPacket, clientAddr string) []
 	log.Printf("[Protocol] User login from %s", clientAddr)
 	log.Printf("[Protocol] Encrypted data (%d bytes): %x", len(packet.EncryptedData), packet.EncryptedData)
 	
-	// Decrypt the login data
-	decryptedData := DecryptXOR(packet.EncryptedData)
+	// Decrypt the login data with client address for circuit breaker
+	decryptedData := DecryptXORWithClientAddr(packet.EncryptedData, clientAddr)
 	log.Printf("[Protocol] Decrypted data: %x", decryptedData)
 	log.Printf("[Protocol] Decrypted as string: %q", string(decryptedData))
 	

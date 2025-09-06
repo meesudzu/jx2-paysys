@@ -1,11 +1,13 @@
 package protocol
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 // LearnedKeys stores dynamically discovered XOR keys for new users
@@ -13,6 +15,11 @@ var (
 	learnedKeys   = make(map[string][]byte) // username -> XOR key
 	learnedKeysMu sync.RWMutex
 	keyStorage    = "/tmp/learned_keys.txt" // File to persist learned keys
+	
+	// Circuit breaker for expensive key detection operations
+	keyDetectionAttempts = make(map[string]time.Time) // client IP -> last attempt time
+	keyDetectionMutex    sync.RWMutex
+	keyDetectionTimeout  = 30 * time.Second // Maximum time for key detection
 )
 
 // init loads any previously learned keys
@@ -23,6 +30,11 @@ func init() {
 // DecryptXOR performs XOR decryption on login data
 // Enhanced to handle multiple encryption keys found in different user scenarios and new users
 func DecryptXOR(data []byte) []byte {
+	return DecryptXORWithClientAddr(data, "unknown")
+}
+
+// DecryptXORWithClientAddr performs XOR decryption with client address for circuit breaker
+func DecryptXORWithClientAddr(data []byte, clientAddr string) []byte {
 	// Try to automatically detect the correct XOR key from repeating patterns
 	xorKey := extractXORKey(data)
 	
@@ -54,8 +66,10 @@ func DecryptXOR(data []byte) []byte {
 		}
 		
 		// For new users, try advanced detection methods if known keys don't work well
-		if bestScore < 50 { // Threshold for "good enough" decryption
-			newUserKey := detectNewUserXORKey(data)
+		// Only if we haven't attempted recently (circuit breaker)
+		if bestScore < 50 && canAttemptKeyDetection(clientAddr) { // Threshold for "good enough" decryption
+			log.Printf("[Encryption] Known keys insufficient (score: %d), attempting new user key detection for %s", bestScore, clientAddr)
+			newUserKey := detectNewUserXORKey(data, clientAddr)
 			if len(newUserKey) == 16 {
 				newScore := evaluateDecryption(data, newUserKey)
 				if newScore > bestScore {
@@ -64,6 +78,8 @@ func DecryptXOR(data []byte) []byte {
 					log.Printf("[Encryption] Detected new user XOR key: %x (score: %d)", newUserKey, newScore)
 				}
 			}
+		} else if bestScore < 50 {
+			log.Printf("[Encryption] Skipping expensive key detection for %s due to circuit breaker", clientAddr)
 		}
 		
 		xorKey = bestKey
@@ -549,105 +565,181 @@ func CreateEncryptedLoginResponse(result uint8, message string) []byte {
 	return result_packet
 }
 
+// canAttemptKeyDetection implements circuit breaker pattern for expensive key detection
+func canAttemptKeyDetection(clientAddr string) bool {
+	keyDetectionMutex.Lock()
+	defer keyDetectionMutex.Unlock()
+	
+	lastAttempt, exists := keyDetectionAttempts[clientAddr]
+	if !exists {
+		keyDetectionAttempts[clientAddr] = time.Now()
+		return true
+	}
+	
+	// Allow new attempt if enough time has passed (5 minutes cooldown)
+	if time.Since(lastAttempt) > 5*time.Minute {
+		keyDetectionAttempts[clientAddr] = time.Now()
+		return true
+	}
+	
+	return false
+}
+
 // detectNewUserXORKey attempts to discover XOR keys for new users using advanced techniques
-func detectNewUserXORKey(data []byte) []byte {
+// Now includes timeout and progress logging to prevent hanging
+func detectNewUserXORKey(data []byte, clientAddr string) []byte {
+	log.Printf("[Encryption] Starting new user XOR key detection for %s", clientAddr)
+	
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), keyDetectionTimeout)
+	defer cancel()
+	
 	// Method 1: Statistical frequency analysis for XOR detection
-	key := detectKeyByFrequencyAnalysis(data)
+	log.Printf("[Encryption] Trying frequency analysis...")
+	key := detectKeyByFrequencyAnalysisWithTimeout(ctx, data)
 	if len(key) == 16 {
+		log.Printf("[Encryption] Found key via frequency analysis: %x", key)
 		return key
 	}
 	
-	// Method 2: Pattern-based key derivation from known key structures
-	key = deriveKeyFromKnownPatterns(data)
+	// Check if we should continue (timeout check)
+	select {
+	case <-ctx.Done():
+		log.Printf("[Encryption] Key detection timeout for %s", clientAddr)
+		return nil
+	default:
+	}
+	
+	// Method 2: Pattern-based key derivation from known key structures  
+	log.Printf("[Encryption] Trying pattern-based derivation...")
+	key = deriveKeyFromKnownPatternsWithTimeout(ctx, data)
 	if len(key) == 16 {
+		log.Printf("[Encryption] Found key via pattern derivation: %x", key)
 		return key
 	}
 	
-	// Method 3: Brute force common XOR patterns
+	// Check timeout again
+	select {
+	case <-ctx.Done():
+		log.Printf("[Encryption] Key detection timeout for %s", clientAddr)
+		return nil
+	default:
+	}
+	
+	// Method 3: Brute force common XOR patterns (fast)
+	log.Printf("[Encryption] Trying brute force patterns...")
 	key = bruteForceCommonPatterns(data)
 	if len(key) == 16 {
+		log.Printf("[Encryption] Found key via brute force: %x", key)
 		return key
 	}
 	
 	// Method 4: Try to derive key from typical login data structure
+	log.Printf("[Encryption] Trying login structure analysis...")
 	key = deriveKeyFromLoginStructure(data)
 	if len(key) == 16 {
+		log.Printf("[Encryption] Found key via login structure: %x", key)
 		return key
 	}
 	
+	log.Printf("[Encryption] No suitable XOR key found for %s", clientAddr)
 	return nil
 }
 
-// detectKeyByFrequencyAnalysis uses statistical analysis to detect XOR patterns
-func detectKeyByFrequencyAnalysis(data []byte) []byte {
+// detectKeyByFrequencyAnalysisWithTimeout uses statistical analysis to detect XOR patterns with timeout
+func detectKeyByFrequencyAnalysisWithTimeout(ctx context.Context, data []byte) []byte {
 	if len(data) < 32 { // Need sufficient data for analysis
 		return nil
 	}
 	
-	// Analyze byte frequency patterns that might indicate XOR encryption
-	// XOR with repeating key creates patterns in the encrypted data
+	// Optimized: Only try 16-byte keys as that's what we know JX2 uses
+	keyLen := 16
+	if len(data) < keyLen*2 {
+		return nil
+	}
 	
-	// Try different key lengths (focus on 16 bytes)
-	for keyLen := 16; keyLen <= 16; keyLen++ {
-		if len(data) < keyLen*2 {
+	candidateKey := make([]byte, keyLen)
+	confidence := 0
+	
+	// For each position in the key
+	for pos := 0; pos < keyLen; pos++ {
+		// Check for timeout
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		
+		// Collect bytes at this position across the data (optimized: limit samples)
+		var bytes []byte
+		maxSamples := 20 // Limit samples to speed up analysis
+		sampleCount := 0
+		for i := pos; i < len(data) && sampleCount < maxSamples; i += keyLen {
+			bytes = append(bytes, data[i])
+			sampleCount++
+		}
+		
+		if len(bytes) < 2 {
 			continue
 		}
 		
-		candidateKey := make([]byte, keyLen)
-		confidence := 0
+		// Find the most common XOR difference that would produce printable ASCII
+		bestByte := byte(0)
+		bestScore := 0
 		
-		// For each position in the key
-		for pos := 0; pos < keyLen; pos++ {
-			// Collect bytes at this position across the data
-			var bytes []byte
-			for i := pos; i < len(data); i += keyLen {
-				bytes = append(bytes, data[i])
-			}
-			
-			if len(bytes) < 2 {
-				continue
-			}
-			
-			// Find the most common XOR difference that would produce printable ASCII
-			bestByte := byte(0)
-			bestScore := 0
-			
-			for candidate := 0; candidate < 256; candidate++ {
-				score := 0
-				for _, b := range bytes {
-					decrypted := b ^ byte(candidate)
-					// Score based on likelihood of being part of login data
-					if (decrypted >= 'a' && decrypted <= 'z') ||
-					   (decrypted >= 'A' && decrypted <= 'Z') ||
-					   (decrypted >= '0' && decrypted <= '9') ||
-					   decrypted == 0 || decrypted == ' ' {
-						score += 2
-					} else if decrypted >= 32 && decrypted <= 126 {
-						score += 1
-					}
-				}
-				
-				if score > bestScore {
-					bestScore = score
-					bestByte = byte(candidate)
+		// Optimized: Test fewer candidates, focus on likely ranges
+		candidates := []int{}
+		// Common ASCII ranges that might be XORed
+		for c := 32; c <= 126; c++ { // Printable ASCII
+			candidates = append(candidates, c)
+		}
+		for c := 0; c <= 31; c++ { // Control chars
+			candidates = append(candidates, c)
+		}
+		
+		for _, candidate := range candidates {
+			score := 0
+			for _, b := range bytes {
+				decrypted := b ^ byte(candidate)
+				// Score based on likelihood of being part of login data
+				if (decrypted >= 'a' && decrypted <= 'z') ||
+				   (decrypted >= 'A' && decrypted <= 'Z') ||
+				   (decrypted >= '0' && decrypted <= '9') {
+					score += 3 // Higher score for alphanumeric
+				} else if decrypted == 0 || decrypted == ' ' {
+					score += 2 // Good score for null/space
+				} else if decrypted >= 32 && decrypted <= 126 {
+					score += 1 // Lower score for other printable
 				}
 			}
 			
-			candidateKey[pos] = bestByte
-			confidence += bestScore
+			if score > bestScore {
+				bestScore = score
+				bestByte = byte(candidate)
+			}
 		}
 		
-		// Check if this key produces reasonable results
-		if confidence > len(data)/2 { // Reasonable threshold
-			return candidateKey
-		}
+		candidateKey[pos] = bestByte
+		confidence += bestScore
+	}
+	
+	// Check if this key produces reasonable results (lowered threshold)
+	if confidence > len(data)/4 { // More lenient threshold
+		return candidateKey
 	}
 	
 	return nil
 }
 
-// deriveKeyFromKnownPatterns tries to derive new keys based on patterns from known keys
-func deriveKeyFromKnownPatterns(data []byte) []byte {
+// detectKeyByFrequencyAnalysis uses statistical analysis to detect XOR patterns (deprecated - use timeout version)
+func detectKeyByFrequencyAnalysis(data []byte) []byte {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return detectKeyByFrequencyAnalysisWithTimeout(ctx, data)
+}
+
+// deriveKeyFromKnownPatternsWithTimeout tries to derive new keys based on patterns from known keys with timeout
+func deriveKeyFromKnownPatternsWithTimeout(ctx context.Context, data []byte) []byte {
 	knownKeys := [][]byte{
 		{0x45, 0x73, 0x77, 0x29, 0x2f, 0xda, 0x9a, 0x21, 0x10, 0x52, 0xb1, 0x9c, 0x70, 0x93, 0x0e, 0xa0},
 		{0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad, 0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x51, 0x0e},
@@ -657,8 +749,15 @@ func deriveKeyFromKnownPatterns(data []byte) []byte {
 	
 	// Try variations of known keys (rotations, byte shifts, etc.)
 	for _, baseKey := range knownKeys {
-		// Try rotations
-		for shift := 1; shift < 16; shift++ {
+		// Check for timeout
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		
+		// Try rotations (optimized: fewer rotations)
+		for shift := 1; shift < 16; shift += 2 { // Test every other rotation
 			candidateKey := make([]byte, 16)
 			for i := 0; i < 16; i++ {
 				candidateKey[i] = baseKey[(i+shift)%16]
@@ -669,8 +768,8 @@ func deriveKeyFromKnownPatterns(data []byte) []byte {
 			}
 		}
 		
-		// Try bit shifts
-		for shift := 1; shift < 8; shift++ {
+		// Try bit shifts (optimized: fewer shifts)
+		for shift := 1; shift < 8; shift += 2 { // Test every other shift
 			candidateKey := make([]byte, 16)
 			for i := 0; i < 16; i++ {
 				candidateKey[i] = baseKey[i] << shift | baseKey[i] >> (8-shift)
@@ -681,8 +780,8 @@ func deriveKeyFromKnownPatterns(data []byte) []byte {
 			}
 		}
 		
-		// Try byte-wise XOR with simple patterns
-		patterns := []byte{0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF}
+		// Try byte-wise XOR with simple patterns (optimized: fewer patterns)
+		patterns := []byte{0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF}
 		for _, pattern := range patterns {
 			candidateKey := make([]byte, 16)
 			for i := 0; i < 16; i++ {
@@ -696,6 +795,13 @@ func deriveKeyFromKnownPatterns(data []byte) []byte {
 	}
 	
 	return nil
+}
+
+// deriveKeyFromKnownPatterns tries to derive new keys based on patterns from known keys (deprecated)
+func deriveKeyFromKnownPatterns(data []byte) []byte {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return deriveKeyFromKnownPatternsWithTimeout(ctx, data)
 }
 
 // bruteForceCommonPatterns tries common XOR key patterns
