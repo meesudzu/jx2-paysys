@@ -68,39 +68,70 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 		// Bishop packet - handle with persistent session
 		log.Printf("[Protocol] Bishop connection detected")
 		h.handleBishopPacket(conn, data, clientAddr)
-	} else if n == 229 {
-		// Player login packet (original 0x42FF format)
+	} else {
+		// Parse packet to determine type and handle accordingly
 		packet, err := ParsePacket(data)
 		if err != nil {
 			log.Printf("[Protocol] Error parsing packet from %s: %v", clientAddr, err)
 			conn.Close()
 			return
 		}
-		if p, ok := packet.(*UserLoginPacket); ok {
+
+		// Handle based on packet type
+		switch p := packet.(type) {
+		case *UserLoginPacket:
+			log.Printf("[Protocol] User login packet from %s", clientAddr)
 			response := h.handleUserLogin(p, clientAddr)
 			if response != nil {
 				conn.Write(response)
 			}
-		}
-		conn.Close()
-	} else if n == 227 {
-		// Game client login packet (protocol 62 with key)
-		packet, err := ParsePacket(data)
-		if err != nil {
-			log.Printf("[Protocol] Error parsing game packet from %s: %v", clientAddr, err)
 			conn.Close()
-			return
-		}
-		if p, ok := packet.(*GameLoginPacket); ok {
+		case *GameLoginPacket:
+			log.Printf("[Protocol] Game login packet from %s", clientAddr)
 			response := h.handleGameLogin(p, clientAddr)
 			if response != nil {
 				conn.Write(response)
 			}
+			conn.Close()
+		case *CharacterCreatePacket:
+			log.Printf("[Protocol] Character creation packet from %s", clientAddr)
+			response := h.handleCharacterCreate(p, clientAddr)
+			if response != nil {
+				conn.Write(response)
+			}
+			conn.Close()
+		case *PlayerVerifyPacket:
+			log.Printf("[Protocol] Player verification packet from %s", clientAddr)
+			response := h.handlePlayerVerify(p, clientAddr)
+			if response != nil {
+				conn.Write(response)
+			}
+			conn.Close()
+		case *CharacterSelectPacket:
+			log.Printf("[Protocol] Character selection packet from %s", clientAddr)
+			response := h.handleCharacterSelect(p, clientAddr)
+			if response != nil {
+				conn.Write(response)
+			}
+			conn.Close()
+		case *CharacterDataPacket:
+			log.Printf("[Protocol] Character data packet from %s", clientAddr)
+			response := h.handleCharacterData(p, clientAddr)
+			if response != nil {
+				conn.Write(response)
+			}
+			conn.Close()
+		case *SessionConfirm2Packet:
+			log.Printf("[Protocol] Session confirmation packet from %s", clientAddr)
+			response := h.handleSessionConfirm2(p, clientAddr)
+			if response != nil {
+				conn.Write(response)
+			}
+			conn.Close()
+		default:
+			log.Printf("[Protocol] Unhandled packet type from %s: %T", clientAddr, packet)
+			conn.Close()
 		}
-		conn.Close()
-	} else {
-		log.Printf("[Protocol] Unexpected packet length %d from %s", n, clientAddr)
-		conn.Close()
 	}
 }
 
@@ -574,4 +605,96 @@ func (h *Handler) GetActiveBishopSessions() map[string]*BishopSession {
 		}
 	}
 	return sessions
+}
+
+// handleCharacterCreate handles character creation packets
+func (h *Handler) handleCharacterCreate(packet *CharacterCreatePacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Character creation from %s", clientAddr)
+	log.Printf("[Protocol] Encrypted data length: %d bytes", len(packet.EncryptedData))
+	
+	// Decrypt the character creation data
+	decryptedData := DecryptXOR(packet.EncryptedData)
+	log.Printf("[Protocol] Decrypted character creation data: %x", decryptedData)
+	
+	// Parse character creation data (username, character name, stats, etc.)
+	// For now, just log and return success
+	log.Printf("[Protocol] Character creation successful from %s", clientAddr)
+	
+	// Create encrypted response similar to login response
+	response := CreateEncryptedLoginResponse(0, "Character created successfully")
+	return response
+}
+
+// handlePlayerVerify handles player verification packets
+func (h *Handler) handlePlayerVerify(packet *PlayerVerifyPacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Player verification from %s", clientAddr)
+	log.Printf("[Protocol] Verification data: %x", packet.Data)
+	
+	// Create a simple verification response (7 bytes to match pattern)
+	response := []byte{
+		0x07, 0x00,       // Size: 7 bytes
+		0x64, 0x97,       // Response type (reverse of 0x26FF -> 0x9764)
+		0xa0, 0x23, 0x7d, // Response data
+	}
+	
+	log.Printf("[Protocol] Player verification successful from %s", clientAddr)
+	return response
+}
+
+// handleCharacterSelect handles character selection packets
+func (h *Handler) handleCharacterSelect(packet *CharacterSelectPacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Character selection from %s", clientAddr)
+	log.Printf("[Protocol] Selection data: %x", packet.Data)
+	
+	// Create a simple selection response (7 bytes to match pattern)
+	response := []byte{
+		0x07, 0x00,       // Size: 7 bytes
+		0x76, 0x97,       // Response type (reverse of 0x50FF -> 0x9776)
+		0xa0, 0x23, 0x7d, // Response data
+	}
+	
+	log.Printf("[Protocol] Character selection successful from %s", clientAddr)
+	return response
+}
+
+// handleCharacterData handles character data packets
+func (h *Handler) handleCharacterData(packet *CharacterDataPacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Character data from %s", clientAddr)
+	log.Printf("[Protocol] Encrypted data length: %d bytes", len(packet.EncryptedData))
+	
+	// Decrypt the character data
+	decryptedData := DecryptXOR(packet.EncryptedData)
+	log.Printf("[Protocol] Decrypted character data: %x", decryptedData)
+	
+	// Create character data response (57 bytes based on PCAP analysis)
+	response := []byte{
+		0x39, 0x00,       // Size: 57 bytes
+		0x90, 0xca,       // Response type 
+		// Sample encrypted character data response
+		0xab, 0xfb, 0x52, 0xf0, 0xbe, 0x69, 0xe7, 0x9c,
+		0x4f, 0x3e, 0xd3, 0x89, 0xc9, 0x81, 0xd1, 0x90,
+		0xab, 0xfb, 0x52, 0xf0, 0xbe, 0x69, 0xe7, 0x9c,
+		0x4f, 0x7d, 0xe7, 0xca, 0x88, 0xb5, 0xe3, 0xa3,
+		0x93, 0xba, 0x62, 0xb2, 0x87, 0x5b, 0xd4, 0xa4,
+		0x7d, 0x3f, 0xd3, 0x89, 0xc9, 0xb4, 0xe1, 0xa9,
+		0xea, 0xcd, 0x14, 0xc7, 0xd7,
+	}
+	
+	log.Printf("[Protocol] Character data response sent to %s", clientAddr)
+	return response
+}
+
+// handleSessionConfirm2 handles alternative session confirmation packets
+func (h *Handler) handleSessionConfirm2(packet *SessionConfirm2Packet, clientAddr string) []byte {
+	log.Printf("[Protocol] Session confirmation from %s", clientAddr)
+	log.Printf("[Protocol] Encrypted data length: %d bytes", len(packet.EncryptedData))
+	
+	// Decrypt the session data
+	decryptedData := DecryptXOR(packet.EncryptedData)
+	log.Printf("[Protocol] Decrypted session data: %x", decryptedData)
+	
+	// Create a simple acknowledgment (no response needed based on PCAP)
+	// Return nil to indicate no response should be sent
+	log.Printf("[Protocol] Session confirmation processed from %s", clientAddr)
+	return nil
 }

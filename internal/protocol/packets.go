@@ -27,6 +27,13 @@ const (
 	// Session/Follow-up packets
 	PacketTypeSessionConfirm PacketType = 0x14ff  // 47-byte session confirmation packet after player identity verification
 	
+	// Character and player management packets (from new PCAP analysis)
+	PacketTypeCharacterCreate  PacketType = 0xDDFF  // Character creation packet (229 bytes)
+	PacketTypePlayerVerify     PacketType = 0x26FF  // Player verification packet (7 bytes)
+	PacketTypeCharacterSelect  PacketType = 0x50FF  // Character selection packet (7 bytes)
+	PacketTypeCharacterData    PacketType = 0xDBFF  // Character data packet (61 bytes)
+	PacketTypeSessionConfirm2  PacketType = 0x9DFF  // Alternative session confirmation (47 bytes)
+	
 	// Account management packets (inferred from JX2 system)
 	PacketTypeUserLogout     PacketType = 0x0001
 	PacketTypeUserVerify     PacketType = 0x0002
@@ -108,6 +115,36 @@ type PasswordChangePacket struct {
 	EncryptedData []byte // XOR encrypted: username + old_password + new_password
 }
 
+// CharacterCreatePacket represents character creation request (encrypted)
+type CharacterCreatePacket struct {
+	Header PacketHeader
+	EncryptedData []byte // XOR encrypted character creation data
+}
+
+// PlayerVerifyPacket represents player verification request (7 bytes)
+type PlayerVerifyPacket struct {
+	Header PacketHeader
+	Data   []byte // Small verification data
+}
+
+// CharacterSelectPacket represents character selection request (7 bytes)
+type CharacterSelectPacket struct {
+	Header PacketHeader
+	Data   []byte // Character selection data
+}
+
+// CharacterDataPacket represents character data packet (61 bytes)
+type CharacterDataPacket struct {
+	Header PacketHeader
+	EncryptedData []byte // XOR encrypted character data
+}
+
+// SessionConfirm2Packet represents alternative session confirmation (47 bytes)
+type SessionConfirm2Packet struct {
+	Header PacketHeader
+	EncryptedData []byte // XOR encrypted session data
+}
+
 // ParsePacket parses incoming packet data
 func ParsePacket(data []byte) (interface{}, error) {
 	if len(data) < 4 {
@@ -146,6 +183,16 @@ func ParsePacket(data []byte) (interface{}, error) {
 		return parseUserLoginPacket(data)
 	case PacketTypeSessionConfirm:
 		return parseSessionConfirmPacket(data)
+	case PacketTypeCharacterCreate:
+		return parseCharacterCreatePacket(data)
+	case PacketTypePlayerVerify:
+		return parsePlayerVerifyPacket(data)
+	case PacketTypeCharacterSelect:
+		return parseCharacterSelectPacket(data)
+	case PacketTypeCharacterData:
+		return parseCharacterDataPacket(data)
+	case PacketTypeSessionConfirm2:
+		return parseSessionConfirm2Packet(data)
 	default:
 		return nil, fmt.Errorf("unknown packet type: 0x%04X", header.Type)
 	}
@@ -324,4 +371,104 @@ func CreateGameResponse(key uint32, result uint8, data []byte) []byte {
 	buf.Write(payload)
 	
 	return buf.Bytes()
+}
+
+// parseCharacterCreatePacket parses character creation packet
+func parseCharacterCreatePacket(data []byte) (*CharacterCreatePacket, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("character create packet too short")
+	}
+
+	packet := &CharacterCreatePacket{}
+	buf := bytes.NewReader(data)
+	
+	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
+		return nil, err
+	}
+
+	// Rest is encrypted character creation data
+	packet.EncryptedData = make([]byte, len(data)-4)
+	copy(packet.EncryptedData, data[4:])
+
+	return packet, nil
+}
+
+// parsePlayerVerifyPacket parses player verification packet
+func parsePlayerVerifyPacket(data []byte) (*PlayerVerifyPacket, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("player verify packet too short")
+	}
+
+	packet := &PlayerVerifyPacket{}
+	buf := bytes.NewReader(data)
+	
+	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
+		return nil, err
+	}
+
+	// Rest is verification data
+	packet.Data = make([]byte, len(data)-4)
+	copy(packet.Data, data[4:])
+
+	return packet, nil
+}
+
+// parseCharacterSelectPacket parses character selection packet
+func parseCharacterSelectPacket(data []byte) (*CharacterSelectPacket, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("character select packet too short")
+	}
+
+	packet := &CharacterSelectPacket{}
+	buf := bytes.NewReader(data)
+	
+	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
+		return nil, err
+	}
+
+	// Rest is selection data
+	packet.Data = make([]byte, len(data)-4)
+	copy(packet.Data, data[4:])
+
+	return packet, nil
+}
+
+// parseCharacterDataPacket parses character data packet
+func parseCharacterDataPacket(data []byte) (*CharacterDataPacket, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("character data packet too short")
+	}
+
+	packet := &CharacterDataPacket{}
+	buf := bytes.NewReader(data)
+	
+	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
+		return nil, err
+	}
+
+	// Rest is encrypted character data
+	packet.EncryptedData = make([]byte, len(data)-4)
+	copy(packet.EncryptedData, data[4:])
+
+	return packet, nil
+}
+
+// parseSessionConfirm2Packet parses alternative session confirmation packet
+func parseSessionConfirm2Packet(data []byte) (*SessionConfirm2Packet, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("session confirm2 packet too short")
+	}
+
+	packet := &SessionConfirm2Packet{}
+	buf := bytes.NewReader(data)
+	
+	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
+		return nil, err
+	}
+
+	// Rest is encrypted session data
+	packet.EncryptedData = make([]byte, len(data)-4)
+	copy(packet.EncryptedData, data[4:])
+
+	return packet, nil
 }

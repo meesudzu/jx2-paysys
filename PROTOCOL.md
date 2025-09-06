@@ -114,6 +114,71 @@ Offset | Size | Field   | Description
 - 3: Invalid credentials
 - 4: Account suspended
 
+#### Character Creation (0xDDFF)
+
+**Purpose**: Character creation request
+
+**Structure**:
+```
+Offset | Size | Field         | Description
+-------|------|---------------|------------------
+0x00   | 2    | Size          | Total packet size (229 bytes)
+0x02   | 2    | Type          | Packet type (0xDDFF)
+0x04   | 225  | EncryptedData | XOR encrypted character data
+```
+
+#### Player Verification (0x26FF)
+
+**Purpose**: Player verification during login sequence
+
+**Structure**:
+```
+Offset | Size | Field | Description
+-------|------|-------|------------------
+0x00   | 2    | Size  | Total packet size (7 bytes)
+0x02   | 2    | Type  | Packet type (0x26FF)
+0x04   | 3    | Data  | Verification data
+```
+
+#### Character Selection (0x50FF)
+
+**Purpose**: Character selection request
+
+**Structure**:
+```
+Offset | Size | Field | Description
+-------|------|-------|------------------
+0x00   | 2    | Size  | Total packet size (7 bytes)
+0x02   | 2    | Type  | Packet type (0x50FF)
+0x04   | 3    | Data  | Selection data
+```
+
+#### Character Data (0xDBFF)
+
+**Purpose**: Character data exchange
+
+**Structure**:
+```
+Offset | Size | Field         | Description
+-------|------|---------------|------------------
+0x00   | 2    | Size          | Total packet size (61 bytes)
+0x02   | 2    | Type          | Packet type (0xDBFF)
+0x04   | 57   | EncryptedData | XOR encrypted character info
+```
+
+#### Session Confirmation (0x9DFF)
+
+**Purpose**: Alternative session confirmation
+
+**Structure**:
+```
+Offset | Size | Field         | Description
+-------|------|---------------|------------------
+0x00   | 2    | Size          | Total packet size (47 bytes)
+0x02   | 2    | Type          | Packet type (0x9DFF)
+0x04   | 43   | EncryptedData | XOR encrypted session data
+```
+
 ### Network Flow
 
 #### Bishop Connection Flow
@@ -123,6 +188,18 @@ Offset | Size | Field   | Description
 #### User Login Flow  
 1. Client → Paysys: User Login (0x42FF) with encrypted credentials
 2. Paysys → Client: User Response (0xA8FF) with encrypted result
+
+#### Character Management Flow
+1. Client → Paysys: Player Verification (0x26FF)
+2. Paysys → Client: Verification Response
+3. Client → Paysys: Character Creation (0xDDFF) with encrypted character data
+4. Paysys → Client: Creation Response
+5. Client → Paysys: Character Selection (0x50FF)
+6. Paysys → Client: Selection Response
+7. Client → Paysys: Character Data (0xDBFF) with encrypted character info
+8. Paysys → Client: Character Data Response
+9. Client → Paysys: Session Confirmation (0x9DFF)
+10. Paysys → Client: (No response required)
 
 ### Implementation Notes
 
