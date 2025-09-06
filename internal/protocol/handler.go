@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -537,57 +538,129 @@ func (h *Handler) handleUserLogin(packet *UserLoginPacket, clientAddr string) []
 	log.Printf("[Protocol] User login from %s", clientAddr)
 	log.Printf("[Protocol] Encrypted data (%d bytes): %x", len(packet.EncryptedData), packet.EncryptedData)
 	
-	// Decrypt the login data with client address for circuit breaker
-	decryptedData := DecryptXORWithClientAddr(packet.EncryptedData, clientAddr)
-	log.Printf("[Protocol] Decrypted data: %x", decryptedData)
-	log.Printf("[Protocol] Decrypted as string: %q", string(decryptedData))
+	// Add overall timeout for the entire login process
+	done := make(chan []byte, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[Protocol] Recovered from panic in handleUserLogin: %v", r)
+				response := CreateEncryptedLoginResponse(1, "Internal error")
+				done <- response
+			}
+		}()
+		
+		// Decrypt the login data with client address for circuit breaker
+		decryptedData := DecryptXORWithClientAddr(packet.EncryptedData, clientAddr)
+		log.Printf("[Protocol] Decrypted data: %x", decryptedData)
+		log.Printf("[Protocol] Decrypted as string: %q", string(decryptedData))
+		
+		// Parse username and password
+		username, password, err := ParseLoginData(decryptedData)
+		if err != nil {
+			log.Printf("[Protocol] Error parsing login data from %s: %v", clientAddr, err)
+			response := CreateEncryptedLoginResponse(1, "Failed to parse login data")
+			done <- response
+			return
+		}
+		
+		log.Printf("[Protocol] Login attempt - Username: %s, Password: %s", username, password)
+		
+		// Verify credentials against database with timeout
+		if h.db != nil {
+			// Database operations with timeout
+			dbDone := make(chan struct {
+				isValid     bool
+				err         error
+				lockedState int
+			}, 1)
+			
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("[Protocol] Recovered from database panic: %v", r)
+						dbDone <- struct {
+							isValid     bool
+							err         error
+							lockedState int
+						}{false, fmt.Errorf("database panic: %v", r), 0}
+					}
+				}()
+				
+				isValid, err := h.db.AccountLogin(username, password)
+				if err != nil {
+					dbDone <- struct {
+						isValid     bool
+						err         error
+						lockedState int
+					}{false, err, 0}
+					return
+				}
+				
+				if !isValid {
+					dbDone <- struct {
+						isValid     bool
+						err         error
+						lockedState int
+					}{false, nil, 0}
+					return
+				}
+				
+				// Check account locked state (0 = not locked, 1 = locked)
+				lockedState, err := h.db.GetAccountState(username)
+				dbDone <- struct {
+					isValid     bool
+					err         error
+					lockedState int
+				}{true, err, lockedState}
+			}()
+			
+			// Wait for database operations or timeout
+			select {
+			case dbResult := <-dbDone:
+				if dbResult.err != nil {
+					log.Printf("[Protocol] Database error for %s: %v", username, dbResult.err)
+					response := CreateEncryptedLoginResponse(2, "Database error")
+					done <- response
+					return
+				}
+				
+				if !dbResult.isValid {
+					log.Printf("[Protocol] Invalid credentials for %s from %s", username, clientAddr)
+					response := CreateEncryptedLoginResponse(3, "Invalid credentials")
+					done <- response
+					return
+				}
+				
+				if dbResult.lockedState != 0 {
+					log.Printf("[Protocol] Account %s is locked (locked: %d)", username, dbResult.lockedState)
+					response := CreateEncryptedLoginResponse(4, "Account locked")
+					done <- response
+					return
+				}
+			case <-time.After(10 * time.Second):
+				log.Printf("[Protocol] Database operation timeout for %s", username)
+				response := CreateEncryptedLoginResponse(2, "Database timeout")
+				done <- response
+				return
+			}
+		} else {
+			// No database mode - accept all logins for testing
+			log.Printf("[Protocol] No database mode - accepting login for %s", username)
+		}
+		
+		log.Printf("[Protocol] Login successful for %s from %s", username, clientAddr)
+		response := CreateEncryptedLoginResponse(0, "Login successful")
+		done <- response
+	}()
 	
-	// Parse username and password
-	username, password, err := ParseLoginData(decryptedData)
-	if err != nil {
-		log.Printf("[Protocol] Error parsing login data from %s: %v", clientAddr, err)
-		response := CreateEncryptedLoginResponse(1, "Failed to parse login data")
+	// Wait for completion or timeout
+	select {
+	case response := <-done:
 		return response
+	case <-time.After(20 * time.Second):
+		log.Printf("[Protocol] handleUserLogin overall timeout after 20 seconds for %s", clientAddr)
+		return CreateEncryptedLoginResponse(1, "Login timeout")
 	}
-	
-	log.Printf("[Protocol] Login attempt - Username: %s, Password: %s", username, password)
-	
-	// Verify credentials against database
-	if h.db != nil {
-		isValid, err := h.db.AccountLogin(username, password)
-		if err != nil {
-			log.Printf("[Protocol] Database error for %s: %v", username, err)
-			response := CreateEncryptedLoginResponse(2, "Database error")
-			return response
-		}
-		
-		if !isValid {
-			log.Printf("[Protocol] Invalid credentials for %s from %s", username, clientAddr)
-			response := CreateEncryptedLoginResponse(3, "Invalid credentials")
-			return response
-		}
-		
-		// Check account locked state (0 = not locked, 1 = locked)
-		lockedState, err := h.db.GetAccountState(username)
-		if err != nil {
-			log.Printf("[Protocol] Error getting account state for %s: %v", username, err)
-			response := CreateEncryptedLoginResponse(2, "Account state error")
-			return response
-		}
-		
-		if lockedState != 0 {
-			log.Printf("[Protocol] Account %s is locked (locked: %d)", username, lockedState)
-			response := CreateEncryptedLoginResponse(4, "Account locked")
-			return response
-		}
-	} else {
-		// No database mode - accept all logins for testing
-		log.Printf("[Protocol] No database mode - accepting login for %s", username)
-	}
-	
-	log.Printf("[Protocol] Login successful for %s from %s", username, clientAddr)
-	response := CreateEncryptedLoginResponse(0, "Login successful")
-	return response
 }
 
 // HandlePing handles ping packets to keep connections alive

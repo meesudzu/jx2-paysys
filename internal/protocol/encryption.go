@@ -19,7 +19,14 @@ var (
 	// Circuit breaker for expensive key detection operations
 	keyDetectionAttempts = make(map[string]time.Time) // client IP -> last attempt time
 	keyDetectionMutex    sync.RWMutex
-	keyDetectionTimeout  = 30 * time.Second // Maximum time for key detection
+	keyDetectionTimeout  = 15 * time.Second // Maximum time for key detection (reduced from 30s)
+	
+	// Global circuit breaker for system overload protection
+	globalKeyDetectionAttempts = 0
+	globalKeyDetectionMutex    sync.RWMutex
+	globalResetTime           = time.Now()
+	maxGlobalAttempts         = 5  // Maximum concurrent attempts across all clients
+	globalResetPeriod         = 1 * time.Minute
 )
 
 // init loads any previously learned keys
@@ -35,62 +42,88 @@ func DecryptXOR(data []byte) []byte {
 
 // DecryptXORWithClientAddr performs XOR decryption with client address for circuit breaker
 func DecryptXORWithClientAddr(data []byte, clientAddr string) []byte {
-	// Try to automatically detect the correct XOR key from repeating patterns
-	xorKey := extractXORKey(data)
-	
-	if len(xorKey) == 0 {
-		// If pattern extraction fails, try known keys in order of preference
-		knownKeys := [][]byte{
-			// Original key (works for "admin" user from player-login.pcap)
-			{0x45, 0x73, 0x77, 0x29, 0x2f, 0xda, 0x9a, 0x21, 0x10, 0x52, 0xb1, 0x9c, 0x70, 0x93, 0x0e, 0xa0},
-			// Tester_1 key found in tester_1_create_character_and_login_game.pcap
-			{0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad, 0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x51, 0x0e},
-			// Tester_3 key found in tester_3_create_character_and_login_game.pcap (rotated variant of tester_1)
-			{0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x50, 0x0e, 0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad},
-			// Tester_4 key found in tester_4_create_character_and_login_game.pcap
-			{0x47, 0xe7, 0x92, 0xaf, 0x28, 0xdb, 0x6e, 0x54, 0xec, 0xf7, 0x9b, 0xf7, 0xb4, 0x4d, 0xe1, 0x63},
-			// Character creation key used by multiple users for character creation packets
-			{0x63, 0xd5, 0xb8, 0xd7, 0x2b, 0x9b, 0x02, 0x2a, 0x5e, 0xc9, 0x38, 0x3f, 0x79, 0x66, 0x50, 0xda},
-		}
-		
-		// Try each known key and pick the one that gives the best result
-		bestKey := knownKeys[0] // Default to first key
-		bestScore := evaluateDecryption(data, knownKeys[0])
-		
-		for _, key := range knownKeys[1:] {
-			score := evaluateDecryption(data, key)
-			if score > bestScore {
-				bestKey = key
-				bestScore = score
+	// Add overall timeout for the entire decryption process
+	done := make(chan []byte, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[Encryption] Recovered from panic in DecryptXORWithClientAddr: %v", r)
+				done <- data // Return original data if panic
 			}
-		}
+		}()
 		
-		// For new users, try advanced detection methods if known keys don't work well
-		// Only if we haven't attempted recently (circuit breaker)
-		if bestScore < 50 && canAttemptKeyDetection(clientAddr) { // Threshold for "good enough" decryption
-			log.Printf("[Encryption] Known keys insufficient (score: %d), attempting new user key detection for %s", bestScore, clientAddr)
-			newUserKey := detectNewUserXORKey(data, clientAddr)
-			if len(newUserKey) == 16 {
-				newScore := evaluateDecryption(data, newUserKey)
-				if newScore > bestScore {
-					bestKey = newUserKey
-					bestScore = newScore
-					log.Printf("[Encryption] Detected new user XOR key: %x (score: %d)", newUserKey, newScore)
+		// Try to automatically detect the correct XOR key from repeating patterns
+		xorKey := extractXORKey(data)
+		
+		if len(xorKey) == 0 {
+			// If pattern extraction fails, try known keys in order of preference
+			knownKeys := [][]byte{
+				// Original key (works for "admin" user from player-login.pcap)
+				{0x45, 0x73, 0x77, 0x29, 0x2f, 0xda, 0x9a, 0x21, 0x10, 0x52, 0xb1, 0x9c, 0x70, 0x93, 0x0e, 0xa0},
+				// Tester_1 key found in tester_1_create_character_and_login_game.pcap
+				{0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad, 0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x51, 0x0e},
+				// Tester_3 key found in tester_3_create_character_and_login_game.pcap (rotated variant of tester_1)
+				{0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x50, 0x0e, 0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad},
+				// Tester_4 key found in tester_4_create_character_and_login_game.pcap
+				{0x47, 0xe7, 0x92, 0xaf, 0x28, 0xdb, 0x6e, 0x54, 0xec, 0xf7, 0x9b, 0xf7, 0xb4, 0x4d, 0xe1, 0x63},
+				// Character creation key used by multiple users for character creation packets
+				{0x63, 0xd5, 0xb8, 0xd7, 0x2b, 0x9b, 0x02, 0x2a, 0x5e, 0xc9, 0x38, 0x3f, 0x79, 0x66, 0x50, 0xda},
+			}
+			
+			// Try each known key and pick the one that gives the best result
+			bestKey := knownKeys[0] // Default to first key
+			bestScore := evaluateDecryption(data, knownKeys[0])
+			
+			for _, key := range knownKeys[1:] {
+				score := evaluateDecryption(data, key)
+				if score > bestScore {
+					bestKey = key
+					bestScore = score
 				}
 			}
-		} else if bestScore < 50 {
-			log.Printf("[Encryption] Skipping expensive key detection for %s due to circuit breaker", clientAddr)
+			
+			// For new users, try advanced detection methods if known keys don't work well
+			// Only if we haven't attempted recently (circuit breaker)
+			if bestScore < 50 && canAttemptKeyDetection(clientAddr) { // Threshold for "good enough" decryption
+				log.Printf("[Encryption] Known keys insufficient (score: %d), attempting new user key detection for %s", bestScore, clientAddr)
+				newUserKey := detectNewUserXORKey(data, clientAddr)
+				if len(newUserKey) == 16 {
+					newScore := evaluateDecryption(data, newUserKey)
+					if newScore > bestScore {
+						bestKey = newUserKey
+						bestScore = newScore
+						log.Printf("[Encryption] Detected new user XOR key: %x (score: %d)", newUserKey, newScore)
+					}
+				}
+			} else if bestScore < 50 {
+				log.Printf("[Encryption] Skipping expensive key detection for %s due to circuit breaker", clientAddr)
+			}
+			
+			xorKey = bestKey
 		}
 		
-		xorKey = bestKey
-	}
+		result := make([]byte, len(data))
+		for i := 0; i < len(data); i++ {
+			result[i] = data[i] ^ xorKey[i%len(xorKey)]
+		}
+		
+		done <- result
+	}()
 	
-	result := make([]byte, len(data))
-	for i := 0; i < len(data); i++ {
-		result[i] = data[i] ^ xorKey[i%len(xorKey)]
+	// Wait for completion or timeout
+	select {
+	case result := <-done:
+		return result
+	case <-time.After(10 * time.Second):
+		log.Printf("[Encryption] DecryptXORWithClientAddr timeout after 10 seconds for %s", clientAddr)
+		// Return data decrypted with default key as fallback
+		defaultKey := []byte{0x45, 0x73, 0x77, 0x29, 0x2f, 0xda, 0x9a, 0x21, 0x10, 0x52, 0xb1, 0x9c, 0x70, 0x93, 0x0e, 0xa0}
+		result := make([]byte, len(data))
+		for i := 0; i < len(data); i++ {
+			result[i] = data[i] ^ defaultKey[i%len(defaultKey)]
+		}
+		return result
 	}
-	
-	return result
 }
 
 // extractXORKey tries to extract the XOR key from repeating patterns
@@ -220,28 +253,82 @@ func EncryptXOR(data []byte) []byte {
 }
 
 // ParseLoginData parses decrypted login data to extract username and password
-// Enhanced to handle both string-based and binary login formats, with improved new user support
+// Enhanced to handle both string-based and binary login formats, with improved new user support and timeout protection
 func ParseLoginData(decryptedData []byte) (username, password string, err error) {
-	// Method 1: Try classic null-separated string format (admin login style)
-	username, password, err = parseStringBasedLogin(decryptedData)
-	if err == nil && username != "" && isValidUsername(username) {
-		return username, password, nil
-	}
+	// Add timeout protection for parsing operations
+	done := make(chan struct {
+		username string
+		password string
+		err      error
+	}, 1)
 	
-	// Method 2: Try structured binary format (tester login style)
-	username, password, err = parseBinaryBasedLogin(decryptedData)
-	if err == nil && username != "" && isValidUsername(username) {
-		return username, password, nil
-	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[Encryption] Recovered from panic in ParseLoginData: %v", r)
+				done <- struct {
+					username string
+					password string
+					err      error
+				}{"", "", fmt.Errorf("parsing panic: %v", r)}
+			}
+		}()
+		
+		// Limit data size to prevent memory issues
+		if len(decryptedData) > 1024 {
+			decryptedData = decryptedData[:1024]
+		}
+		
+		// Method 1: Try classic null-separated string format (admin login style)
+		username, password, err := parseStringBasedLogin(decryptedData)
+		if err == nil && username != "" && isValidUsername(username) {
+			done <- struct {
+				username string
+				password string
+				err      error
+			}{username, password, nil}
+			return
+		}
+		
+		// Method 2: Try structured binary format (tester login style)
+		username, password, err = parseBinaryBasedLogin(decryptedData)
+		if err == nil && username != "" && isValidUsername(username) {
+			done <- struct {
+				username string
+				password string
+				err      error
+			}{username, password, nil}
+			return
+		}
+		
+		// Method 3: Enhanced fallback for new users - more aggressive string extraction
+		username, password, err = parseAdvancedStringLogin(decryptedData)
+		if err == nil && username != "" && isValidUsername(username) {
+			done <- struct {
+				username string
+				password string
+				err      error
+			}{username, password, nil}
+			return
+		}
+		
+		// Method 4: Final fallback to raw string extraction
+		username, password, err = parseRawStringLogin(decryptedData)
+		done <- struct {
+			username string
+			password string
+			err      error
+		}{username, password, err}
+	}()
 	
-	// Method 3: Enhanced fallback for new users - more aggressive string extraction
-	username, password, err = parseAdvancedStringLogin(decryptedData)
-	if err == nil && username != "" && isValidUsername(username) {
-		return username, password, nil
+	// Wait for completion or timeout
+	select {
+	case result := <-done:
+		return result.username, result.password, result.err
+	case <-time.After(5 * time.Second):
+		log.Printf("[Encryption] ParseLoginData timeout after 5 seconds")
+		return "", "", fmt.Errorf("parsing timeout after 5 seconds")
 	}
-	
-	// Method 4: Final fallback to raw string extraction
-	return parseRawStringLogin(decryptedData)
 }
 
 // parseStringBasedLogin handles the classic string-based login format
@@ -282,6 +369,11 @@ func parseStringBasedLogin(decryptedData []byte) (username, password string, err
 
 // parseBinaryBasedLogin handles structured binary login format
 func parseBinaryBasedLogin(decryptedData []byte) (username, password string, err error) {
+	// Limit processing to prevent infinite loops
+	if len(decryptedData) > 512 {
+		decryptedData = decryptedData[:512]
+	}
+	
 	// Look for ASCII strings embedded in binary data
 	strings := extractEmbeddedStrings(decryptedData)
 	
@@ -298,7 +390,12 @@ func parseBinaryBasedLogin(decryptedData []byte) (username, password string, err
 	if len(decryptedData) >= 16 {
 		// Check if this might be a structured login with fixed-length fields
 		// Look for printable characters at common offsets
-		for offset := 0; offset < len(decryptedData)-8; offset += 4 {
+		maxOffset := len(decryptedData) - 32
+		if maxOffset > 100 { // Limit search range
+			maxOffset = 100
+		}
+		
+		for offset := 0; offset < maxOffset; offset += 4 {
 			if offset+32 < len(decryptedData) {
 				// Try to extract a 32-byte string field
 				field := decryptedData[offset : offset+32]
@@ -310,7 +407,7 @@ func parseBinaryBasedLogin(decryptedData []byte) (username, password string, err
 					}
 				}
 				
-				if nullPos > 2 { // Found a null-terminated string
+				if nullPos > 2 && nullPos < 30 { // Found a reasonable null-terminated string
 					candidate := string(field[:nullPos])
 					if isValidUsername(candidate) {
 						return candidate, "", nil
@@ -326,16 +423,31 @@ func parseBinaryBasedLogin(decryptedData []byte) (username, password string, err
 // parseAdvancedStringLogin uses enhanced techniques for new users with unknown key patterns
 func parseAdvancedStringLogin(decryptedData []byte) (username, password string, err error) {
 	// More aggressive string extraction for cases where decryption isn't perfect
+	// Limit processing to prevent infinite loops
+	if len(decryptedData) > 512 {
+		decryptedData = decryptedData[:512]
+	}
 	
 	// Look for ASCII strings with more tolerance for noise
 	var candidateStrings []string
 	currentString := ""
 	consecutivePrintable := 0
+	maxStrings := 10 // Limit number of candidate strings
 	
 	for i, b := range decryptedData {
+		if len(candidateStrings) >= maxStrings {
+			break // Prevent too many candidates
+		}
+		
 		if b >= 32 && b <= 126 { // Printable ASCII
 			currentString += string(b)
 			consecutivePrintable++
+			
+			// Prevent extremely long strings
+			if len(currentString) > 64 {
+				currentString = currentString[:64]
+				break
+			}
 		} else if b == 0 && len(currentString) > 1 {
 			// Null terminator - end current string
 			if len(currentString) >= 2 && consecutivePrintable >= len(currentString)/2 {
@@ -362,6 +474,10 @@ func parseAdvancedStringLogin(decryptedData []byte) (username, password string, 
 	var usernameCandidate, passwordCandidate string
 	
 	for _, candidate := range candidateStrings {
+		if len(candidate) > 64 { // Additional safety check
+			continue
+		}
+		
 		if isValidUsername(candidate) && len(usernameCandidate) == 0 {
 			usernameCandidate = candidate
 		} else if isValidPassword(candidate) && len(passwordCandidate) == 0 {
@@ -384,19 +500,29 @@ func parseAdvancedStringLogin(decryptedData []byte) (username, password string, 
 	// If no clear username found, try pattern-based extraction
 	// Look for strings that appear at expected offsets
 	if len(decryptedData) >= 64 {
-		// Check username area (around offset 9-32)
-		for offset := 9; offset < 32 && offset < len(decryptedData)-8; offset++ {
+		// Check username area (around offset 9-32) - limit search range
+		maxOffset := 32
+		if maxOffset > len(decryptedData)-8 {
+			maxOffset = len(decryptedData) - 8
+		}
+		
+		for offset := 9; offset < maxOffset; offset++ {
 			candidate := extractStringAtOffset(decryptedData, offset, 32)
 			if isValidUsername(candidate) {
 				return candidate, "", nil
 			}
 		}
 		
-		// Check for any recognizable username pattern
+		// Check for any recognizable username pattern - limited
+		processed := 0
 		for _, candidate := range candidateStrings {
+			if processed >= 5 { // Limit processing
+				break
+			}
 			if len(candidate) >= 3 && len(candidate) <= 20 && isAlphanumeric(candidate) {
 				return candidate, "", nil
 			}
+			processed++
 		}
 	}
 	
@@ -565,20 +691,51 @@ func CreateEncryptedLoginResponse(result uint8, message string) []byte {
 	return result_packet
 }
 
-// canAttemptKeyDetection implements circuit breaker pattern for expensive key detection
+// canAttemptKeyDetection implements aggressive circuit breaker pattern for expensive key detection
 func canAttemptKeyDetection(clientAddr string) bool {
+	// Global circuit breaker check first
+	globalKeyDetectionMutex.Lock()
+	
+	// Reset global counter if enough time has passed
+	if time.Since(globalResetTime) > globalResetPeriod {
+		globalKeyDetectionAttempts = 0
+		globalResetTime = time.Now()
+	}
+	
+	// Check if we've exceeded global limit
+	if globalKeyDetectionAttempts >= maxGlobalAttempts {
+		globalKeyDetectionMutex.Unlock()
+		log.Printf("[Encryption] Global circuit breaker active - too many attempts (%d/%d)", globalKeyDetectionAttempts, maxGlobalAttempts)
+		return false
+	}
+	
+	globalKeyDetectionMutex.Unlock()
+	
+	// Per-client circuit breaker
 	keyDetectionMutex.Lock()
 	defer keyDetectionMutex.Unlock()
 	
 	lastAttempt, exists := keyDetectionAttempts[clientAddr]
 	if !exists {
 		keyDetectionAttempts[clientAddr] = time.Now()
+		
+		// Increment global counter
+		globalKeyDetectionMutex.Lock()
+		globalKeyDetectionAttempts++
+		globalKeyDetectionMutex.Unlock()
+		
 		return true
 	}
 	
-	// Allow new attempt if enough time has passed (5 minutes cooldown)
-	if time.Since(lastAttempt) > 5*time.Minute {
+	// More aggressive cooldown - reduced from 5 minutes to 2 minutes
+	if time.Since(lastAttempt) > 2*time.Minute {
 		keyDetectionAttempts[clientAddr] = time.Now()
+		
+		// Increment global counter
+		globalKeyDetectionMutex.Lock()
+		globalKeyDetectionAttempts++
+		globalKeyDetectionMutex.Unlock()
+		
 		return true
 	}
 	
@@ -905,41 +1062,95 @@ func deriveKeyFromLoginStructure(data []byte) []byte {
 	return nil
 }
 
-// loadLearnedKeys loads previously discovered XOR keys from storage
+// loadLearnedKeys loads previously discovered XOR keys from storage with timeout protection
 func loadLearnedKeys() {
-	// Simple file-based storage for learned keys
-	// In production, this could be a database
-	file, err := os.Open(keyStorage)
-	if err != nil {
-		return // File doesn't exist yet, that's okay
-	}
-	defer file.Close()
-	
-	// Read and parse stored keys
-	// Format: username:hexkey
-	data := make([]byte, 4096)
-	n, err := file.Read(data)
-	if err != nil || n == 0 {
-		return
-	}
-	
-	lines := strings.Split(string(data[:n]), "\n")
-	for _, line := range lines {
-		parts := strings.Split(strings.TrimSpace(line), ":")
-		if len(parts) == 2 {
-			username := parts[0]
-			hexKey := parts[1]
-			if len(hexKey) == 32 { // 16 bytes * 2 hex chars
-				key := make([]byte, 16)
-				for i := 0; i < 16; i++ {
-					var b byte
-					fmt.Sscanf(hexKey[i*2:i*2+2], "%02x", &b)
-					key[i] = b
-				}
-				learnedKeys[username] = key
-				log.Printf("[Encryption] Loaded learned key for user: %s", username)
+	// Wrap file operations in a timeout to prevent hanging
+	done := make(chan bool, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[Encryption] Recovered from panic in loadLearnedKeys: %v", r)
 			}
+			done <- true
+		}()
+		
+		// Simple file-based storage for learned keys
+		// In production, this could be a database
+		file, err := os.Open(keyStorage)
+		if err != nil {
+			return // File doesn't exist yet, that's okay
 		}
+		defer file.Close()
+		
+		// Read and parse stored keys with size limits
+		// Format: username:hexkey
+		data := make([]byte, 4096) // Limit file size to prevent memory issues
+		n, err := file.Read(data)
+		if err != nil || n == 0 {
+			return
+		}
+		
+		// Limit number of lines processed to prevent infinite loops
+		content := string(data[:n])
+		if len(content) > 4000 { // Additional safety check
+			content = content[:4000]
+		}
+		
+		lines := strings.Split(content, "\n")
+		processed := 0
+		maxLines := 50 // Limit number of lines to process
+		
+		for _, line := range lines {
+			if processed >= maxLines {
+				break
+			}
+			
+			line = strings.TrimSpace(line)
+			if len(line) == 0 || len(line) > 100 { // Skip empty or overly long lines
+				continue
+			}
+			
+			parts := strings.Split(line, ":")
+			if len(parts) == 2 {
+				username := strings.TrimSpace(parts[0])
+				hexKey := strings.TrimSpace(parts[1])
+				
+				// Validate inputs to prevent issues
+				if len(username) > 0 && len(username) <= 32 && len(hexKey) == 32 {
+					key := make([]byte, 16)
+					validHex := true
+					
+					for i := 0; i < 16; i++ {
+						if i*2+1 >= len(hexKey) {
+							validHex = false
+							break
+						}
+						var b byte
+						_, err := fmt.Sscanf(hexKey[i*2:i*2+2], "%02x", &b)
+						if err != nil {
+							validHex = false
+							break
+						}
+						key[i] = b
+					}
+					
+					if validHex {
+						learnedKeys[username] = key
+						log.Printf("[Encryption] Loaded learned key for user: %s", username)
+					}
+				}
+			}
+			processed++
+		}
+	}()
+	
+	// Wait for completion or timeout
+	select {
+	case <-done:
+		// Completed successfully
+	case <-time.After(5 * time.Second):
+		log.Printf("[Encryption] loadLearnedKeys timeout after 5 seconds")
+		// Don't block startup for this
 	}
 }
 
