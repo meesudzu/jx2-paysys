@@ -56,6 +56,36 @@ The protocol demonstrates that **different users have different XOR keys**. The 
 - **Fallback Mechanism**: Uses known keys if auto-detection fails  
 - **User-Specific Keys**: Each user account may have a unique encryption key
 
+#### Advanced New User Support
+
+The enhanced implementation provides comprehensive support for new users with unknown XOR keys:
+
+**Key Detection Methods**:
+- **Statistical Frequency Analysis**: Uses byte frequency patterns to detect XOR encryption signatures
+- **Pattern-Based Derivation**: Derives keys from known key structures and variations
+- **Brute Force Common Patterns**: Tests common XOR key patterns and sequences
+- **Login Structure Analysis**: Analyzes known login data structure to reverse-engineer keys
+
+**Key Learning System**:
+- **Dynamic Key Storage**: Automatically learns and stores new user keys for future logins
+- **Persistent Storage**: Saves discovered keys to `/tmp/learned_keys.txt` for session persistence
+- **Username Association**: Associates XOR keys with specific usernames for efficient retrieval
+- **Confidence Scoring**: Only learns keys that demonstrate high decryption confidence (score > 50)
+
+**Enhanced Login Parsing**:
+- **Multi-Method Parsing**: Uses 4 different parsing methods for robust username/password extraction
+- **Advanced String Extraction**: More aggressive ASCII string detection for partially decrypted data
+- **Pattern Recognition**: Identifies MD5 hash patterns and structured login data
+- **Noise Tolerance**: Handles imperfect decryption by focusing on high-confidence string regions
+
+**Usage Example**:
+```go
+// For new users, the system automatically:
+decrypted, learnedKey := protocol.DecryptXORWithUsername(encryptedData, "newuser")
+username, password, err := protocol.ParseLoginData(decrypted)
+// System learns and stores the XOR key for "newuser" for future logins
+```
+
 ### Packet Types
 
 #### Bishop Login (0x0020)
