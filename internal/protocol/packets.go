@@ -9,6 +9,27 @@ import (
 // PacketType represents different packet types
 type PacketType uint16
 
+// JX1/JX2 Protocol Constants (based on JX1 Paysys source analysis)
+const (
+	// Protocol ranges from JX1 source
+	C2S_ACCOUNT_BEGIN     = 0x10
+	C2S_MULTISERVER_BEGIN = 0x20
+	
+	// JX1-style account protocol packets
+	C2S_ACCOUNT_LOGIN   = C2S_ACCOUNT_BEGIN + 0x01  // 0x11
+	C2S_GAME_LOGIN      = C2S_ACCOUNT_BEGIN + 0x02  // 0x12  
+	C2S_ACCOUNT_LOGOUT  = C2S_ACCOUNT_BEGIN + 0x03  // 0x13
+	C2S_GATEWAY_VERIFY  = C2S_ACCOUNT_BEGIN + 0x04  // 0x14
+	C2S_GATEWAY_VERIFY_AGAIN = C2S_ACCOUNT_BEGIN + 0x05  // 0x15
+	C2S_PING            = 0x08
+	
+	// Server to client responses
+	S2C_ACCOUNT_LOGIN_RET = 0x81
+	S2C_GAME_LOGIN_RET    = 0x82
+	S2C_GATEWAY_VERIFY    = 0x84
+	S2C_PING              = 0x88
+)
+
 const (
 	// Bishop connection packets
 	PacketTypeBishopLogin    PacketType = 0x0020  // From PCAP analysis
@@ -33,8 +54,10 @@ const (
 	PacketTypeCharacterSelect  PacketType = 0x50FF  // Character selection packet (7 bytes)
 	PacketTypeCharacterData    PacketType = 0xDBFF  // Character data packet (61 bytes)
 	PacketTypeSessionConfirm2  PacketType = 0x9DFF  // Alternative session confirmation (47 bytes)
+	PacketTypeCharacterList    PacketType = 0xDCFF  // Character list request
+	PacketTypeCharacterDelete  PacketType = 0xDEFF  // Character deletion request
 	
-	// Account management packets (inferred from JX2 system)
+	// Account management packets (enhanced with JX1 patterns)
 	PacketTypeUserLogout     PacketType = 0x0001
 	PacketTypeUserVerify     PacketType = 0x0002
 	PacketTypeAccountExchange PacketType = 0x0003
@@ -48,6 +71,30 @@ const (
 	PacketTypeAccountUnlock  PacketType = 0x000B
 )
 
+// JX1-style response codes
+const (
+	ACTION_SUCCESS            = 0x1
+	ACTION_FAILED             = 0x2
+	E_ACCOUNT_OR_PASSWORD     = 0x3
+	E_ACCOUNT_EXIST           = 0x4
+	E_ACCOUNT_NODEPOSIT       = 0x5  // No deposit/coins
+	E_ACCOUNT_ACCESSDENIED    = 0x6
+	E_ADDRESS_OR_PORT         = 0x7
+	E_ACCOUNT_FREEZE          = 0x8
+	E_CHARACTER_NAME_INVALID  = 0x9
+	E_CHARACTER_EXISTS        = 0xA
+	E_CHARACTER_LIMIT         = 0xB
+	E_SERVER_FULL             = 0xC
+)
+
+// JX1-style Account Header (based on KAccountHead structure)
+type AccountHeader struct {
+	Size    uint16    // Size of the struct
+	Version uint16    // Account current version (1)
+	Type    uint16    // Packet type
+	Operate uint32    // Gateway used (operation ID)
+}
+
 // PacketHeader represents the common packet header
 type PacketHeader struct {
 	Size uint16      // Packet size
@@ -59,6 +106,70 @@ type ExtendedPacketHeader struct {
 	Size uint16      // Packet size
 	Type PacketType  // Packet type
 	Key  uint32      // Packet key for request/response matching
+}
+
+// JX1-style structured login packets
+const (
+	LOGIN_USER_ACCOUNT_MIN_LEN  = 4
+	LOGIN_USER_ACCOUNT_MAX_LEN  = 32
+	LOGIN_USER_PASSWORD_MIN_LEN = 6
+	LOGIN_USER_PASSWORD_MAX_LEN = 64
+	ACCOUNT_CURRENT_VERSION     = 1
+)
+
+// AccountUser represents basic account structure (based on KAccountUser)
+type AccountUser struct {
+	Header  AccountHeader
+	Account [LOGIN_USER_ACCOUNT_MAX_LEN]byte // Account name
+}
+
+// AccountUserLoginInfo represents login information (based on KAccountUserLoginInfo)
+type AccountUserLoginInfo struct {
+	Header   AccountHeader
+	Account  [LOGIN_USER_ACCOUNT_MAX_LEN]byte  // Account name
+	Password [LOGIN_USER_PASSWORD_MAX_LEN]byte // Password
+}
+
+// AccountUserReturn represents login response (based on KAccountUserReturn)
+type AccountUserReturn struct {
+	Header  AccountHeader
+	Account [LOGIN_USER_ACCOUNT_MAX_LEN]byte // Account name
+	Result  int32                            // Return code
+}
+
+// AccountUserReturnExt represents extended login response (based on KAccountUserReturnExt)
+type AccountUserReturnExt struct {
+	Header    AccountHeader
+	Account   [LOGIN_USER_ACCOUNT_MAX_LEN]byte // Account name
+	Result    int32                            // Return code
+	ExtPoint  uint16                           // Extension points
+	LeftTime  uint32                           // Remaining time in seconds
+}
+
+// Character management structures
+type CharacterInfo struct {
+	Name     [32]byte  // Character name
+	Level    uint16    // Character level
+	Class    uint8     // Character class
+	Gender   uint8     // Character gender
+	MapID    uint16    // Current map
+	X        uint16    // X coordinate
+	Y        uint16    // Y coordinate
+	Reserved [16]byte  // Reserved for future use
+}
+
+type CharacterCreateInfo struct {
+	Name   [32]byte // Character name
+	Class  uint8    // Character class  
+	Gender uint8    // Character gender
+	Face   uint8    // Face type
+	Hair   uint8    // Hair type
+}
+
+type CharacterListResponse struct {
+	Header    AccountHeader
+	Count     uint8                      // Number of characters
+	Characters [8]CharacterInfo          // Maximum 8 characters per account
 }
 
 // BishopLoginPacket represents Bishop login request
@@ -193,6 +304,10 @@ func ParsePacket(data []byte) (interface{}, error) {
 		return parseCharacterDataPacket(data)
 	case PacketTypeSessionConfirm2:
 		return parseSessionConfirm2Packet(data)
+	case PacketTypeCharacterList:
+		return parseCharacterListPacket(data)
+	case PacketTypeCharacterDelete:
+		return parseCharacterDeletePacket(data)
 	default:
 		return nil, fmt.Errorf("unknown packet type: 0x%04X", header.Type)
 	}
@@ -451,6 +566,108 @@ func parseCharacterDataPacket(data []byte) (*CharacterDataPacket, error) {
 	copy(packet.EncryptedData, data[4:])
 
 	return packet, nil
+}
+
+// CharacterListPacket represents character list request
+type CharacterListPacket struct {
+	Header PacketHeader
+	EncryptedData []byte // XOR encrypted account data
+}
+
+// CharacterDeletePacket represents character deletion request
+type CharacterDeletePacket struct {
+	Header PacketHeader
+	EncryptedData []byte // XOR encrypted character name/ID
+}
+
+// parseCharacterListPacket parses character list request packet
+func parseCharacterListPacket(data []byte) (*CharacterListPacket, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("character list packet too short")
+	}
+
+	packet := &CharacterListPacket{}
+	buf := bytes.NewReader(data)
+	
+	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
+		return nil, err
+	}
+
+	// Rest is encrypted account data
+	packet.EncryptedData = make([]byte, len(data)-4)
+	copy(packet.EncryptedData, data[4:])
+
+	return packet, nil
+}
+
+// parseCharacterDeletePacket parses character deletion packet
+func parseCharacterDeletePacket(data []byte) (*CharacterDeletePacket, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("character delete packet too short")
+	}
+
+	packet := &CharacterDeletePacket{}
+	buf := bytes.NewReader(data)
+	
+	if err := binary.Read(buf, binary.LittleEndian, &packet.Header); err != nil {
+		return nil, err
+	}
+
+	// Rest is encrypted character data
+	packet.EncryptedData = make([]byte, len(data)-4)
+	copy(packet.EncryptedData, data[4:])
+
+	return packet, nil
+}
+
+// CreateCharacterListResponse creates a character list response
+func CreateCharacterListResponse(characters []CharacterInfo) []byte {
+	// Create JX1-style structured response
+	headerSize := 8 // Size of AccountHeader
+	characterSize := 64 // Approximate size per character
+	totalSize := headerSize + 1 + (len(characters) * characterSize) + 8*characterSize // Add space for max 8 characters
+	
+	response := CharacterListResponse{
+		Header: AccountHeader{
+			Size:    uint16(totalSize),
+			Version: ACCOUNT_CURRENT_VERSION,
+			Type:    uint16(PacketTypeCharacterList),
+			Operate: 0,
+		},
+		Count: uint8(len(characters)),
+	}
+	
+	// Copy character data (max 8 characters)
+	for i, char := range characters {
+		if i >= 8 {
+			break
+		}
+		response.Characters[i] = char
+	}
+	
+	// Serialize to bytes
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, response)
+	return buf.Bytes()
+}
+
+// CreateCharacterResponse creates a character operation response
+func CreateCharacterResponse(result uint8, message string) []byte {
+	// Create structured response similar to JX1
+	headerSize := 8 // Size of AccountHeader struct
+	header := AccountHeader{
+		Size:    uint16(headerSize + 1 + len(message)),
+		Version: ACCOUNT_CURRENT_VERSION,
+		Type:    uint16(PacketTypeCharacterCreate), // Will be adjusted based on operation
+		Operate: 0,
+	}
+	
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, header)
+	binary.Write(buf, binary.LittleEndian, result)
+	buf.Write([]byte(message))
+	
+	return buf.Bytes()
 }
 
 // parseSessionConfirm2Packet parses alternative session confirmation packet

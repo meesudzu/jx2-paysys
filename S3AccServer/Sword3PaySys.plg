@@ -1,0 +1,87 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: Sword3PaySys - Win32 Debug--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating command line "rc.exe /l 0x804 /fo"Debug/Sword3PaySys.res" /d "_DEBUG" "F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\Sword3PaySys.rc"" 
+Creating temporary file "D:\temp\RSP285.tmp" with contents
+[
+/nologo /MTd /W3 /Gm /GX /ZI /Od /I "..\..\..\Headers" /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /Fp"Debug/Sword3PaySys.pch" /YX /Fo"Debug/" /Fd"Debug/" /FD /GZ /c 
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\GlobalFun.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\KThread.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\LogFile.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\main.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\S3P_MSSQLServer_Result.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\S3PAccount.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\S3PDB_MSSQLServer_Connection.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\S3PDBConnectionPool.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\S3PDBConVBC.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\S3PDBSocketPool.cpp"
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\S3PResultVBC.cpp"
+]
+Creating command line "cl.exe @D:\temp\RSP285.tmp" 
+Creating temporary file "D:\temp\RSP286.tmp" with contents
+[
+/nologo /MTd /W3 /Gm /GX /ZI /Od /I "..\..\..\Headers" /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /Fp"Debug/Sword3PaySys.pch" /Yc"stdafx.h" /Fo"Debug/" /Fd"Debug/" /FD /GZ /c 
+"F:\DownLoads\SwordOnline\Sources\Sword3PaySys\S3AccServer\StdAfx.cpp"
+]
+Creating command line "cl.exe @D:\temp\RSP286.tmp" 
+Creating temporary file "D:\temp\RSP287.tmp" with contents
+[
+kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib Ws2_32.lib /nologo /subsystem:windows /incremental:yes /pdb:"Debug/Sword3PaySys.pdb" /debug /machine:I386 /out:"Debug/Sword3PaySys.exe" /pdbtype:sept 
+.\Debug\GlobalFun.obj
+.\Debug\KThread.obj
+.\Debug\LogFile.obj
+.\Debug\main.obj
+.\Debug\S3P_MSSQLServer_Result.obj
+.\Debug\S3PAccount.obj
+.\Debug\S3PDB_MSSQLServer_Connection.obj
+.\Debug\S3PDBConnectionPool.obj
+.\Debug\S3PDBConVBC.obj
+.\Debug\S3PDBSocketPool.obj
+.\Debug\S3PResultVBC.obj
+.\Debug\StdAfx.obj
+.\Debug\Sword3PaySys.res
+]
+Creating command line "link.exe @D:\temp\RSP287.tmp"
+<h3>Output Window</h3>
+Compiling resources...
+Compiling...
+StdAfx.cpp
+Compiling...
+GlobalFun.cpp
+f:\downloads\swordonline\sources\sword3paysys\s3accserver\globalfun.cpp(475) : warning C4018: '<=' : signed/unsigned mismatch
+KThread.cpp
+LogFile.cpp
+main.cpp
+S3P_MSSQLServer_Result.cpp
+S3PAccount.cpp
+S3PDB_MSSQLServer_Connection.cpp
+S3PDBConnectionPool.cpp
+S3PDBConVBC.cpp
+S3PDBSocketPool.cpp
+S3PResultVBC.cpp
+Linking...
+Creating temporary file "D:\temp\RSP289.bat" with contents
+[
+@echo off
+md ..\..\..\..\bin\client\debug\
+copy debug\Sword3PaySys.exe ..\..\..\..\bin\Client\Sword3PaySys.exe
+copy debug\Sword3PaySys.exe ..\..\..\..\bin\Client\debug\Sword3PaySys.exe
+]
+Creating command line "D:\temp\RSP289.bat"
+
+子目录或文件 ..\..\..\..\bin\client\debug\ 已经存在。
+已复制         1 个文件。
+已复制         1 个文件。
+
+
+
+<h3>Results</h3>
+Sword3PaySys.exe - 0 error(s), 1 warning(s)
+</pre>
+</body>
+</html>

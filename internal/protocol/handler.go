@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -124,8 +126,22 @@ func (h *Handler) HandleConnection(conn net.Conn) {
 				conn.Write(response)
 			}
 			conn.Close()
+		case *CharacterListPacket:
+			log.Printf("[Protocol] Character list packet from %s", clientAddr)
+			response := h.handleCharacterList(p, clientAddr)
+			if response != nil {
+				conn.Write(response)
+			}
+			conn.Close()
+		case *CharacterDeletePacket:
+			log.Printf("[Protocol] Character delete packet from %s", clientAddr)
+			response := h.handleCharacterDelete(p, clientAddr)
+			if response != nil {
+				conn.Write(response)
+			}
+			conn.Close()
 		case *SessionConfirm2Packet:
-			log.Printf("[Protocol] Session confirmation packet from %s", clientAddr)
+			log.Printf("[Protocol] Session confirmation 2 packet from %s", clientAddr)
 			response := h.handleSessionConfirm2(p, clientAddr)
 			if response != nil {
 				conn.Write(response)
@@ -699,13 +715,55 @@ func (h *Handler) handleCharacterCreate(packet *CharacterCreatePacket, clientAdd
 	decryptedData := DecryptXOR(packet.EncryptedData)
 	log.Printf("[Protocol] Decrypted character creation data: %x", decryptedData)
 	
-	// Parse character creation data (username, character name, stats, etc.)
-	// For now, just log and return success
-	log.Printf("[Protocol] Character creation successful from %s", clientAddr)
+	// Parse character creation data based on JX1 analysis
+	// Character creation packets typically contain:
+	// - Username (account owner)
+	// - Character name
+	// - Character class
+	// - Character gender
+	// - Other attributes
 	
-	// Create encrypted response similar to login response
-	response := CreateEncryptedLoginResponse(0, "Character created successfully")
-	return response
+	// Try to parse the decrypted data to extract username and character info
+	username, _, err := ParseLoginData(decryptedData)
+	if err != nil {
+		log.Printf("[Protocol] Failed to parse character creation data from %s: %v", clientAddr, err)
+		return CreateCharacterResponse(E_CHARACTER_NAME_INVALID, "Invalid character data")
+	}
+	
+	// Extract character name and other data from the decrypted payload
+	// The format varies, but typically character name is after username
+	// For now, use a simple parsing approach
+	characterName := extractCharacterName(decryptedData)
+	class := extractCharacterClass(decryptedData)
+	gender := extractCharacterGender(decryptedData)
+	
+	if len(characterName) == 0 {
+		log.Printf("[Protocol] Invalid character name in creation request from %s", clientAddr)
+		return CreateCharacterResponse(E_CHARACTER_NAME_INVALID, "Invalid character name")
+	}
+	
+	log.Printf("[Protocol] Character creation request: user=%s, character=%s, class=%d, gender=%d", 
+		username, characterName, class, gender)
+	
+	// Create character in database
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	err = h.db.CreateCharacter(ctx, username, characterName, class, gender)
+	if err != nil {
+		log.Printf("[Protocol] Failed to create character %s for %s: %v", characterName, username, err)
+		
+		// Return specific error codes based on error type
+		if err.Error() == "character name already exists" {
+			return CreateCharacterResponse(E_CHARACTER_EXISTS, "Character name already exists")
+		} else if err.Error() == "character limit reached" {
+			return CreateCharacterResponse(E_CHARACTER_LIMIT, "Character limit reached")
+		}
+		return CreateCharacterResponse(ACTION_FAILED, "Failed to create character")
+	}
+	
+	log.Printf("[Protocol] Character %s created successfully for %s", characterName, username)
+	return CreateCharacterResponse(ACTION_SUCCESS, "Character created successfully")
 }
 
 // handlePlayerVerify handles player verification packets
@@ -780,4 +838,156 @@ func (h *Handler) handleSessionConfirm2(packet *SessionConfirm2Packet, clientAdd
 	// Return nil to indicate no response should be sent
 	log.Printf("[Protocol] Session confirmation processed from %s", clientAddr)
 	return nil
+}
+
+// handleCharacterList handles character list request packets
+func (h *Handler) handleCharacterList(packet *CharacterListPacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Character list request from %s", clientAddr)
+	
+	// Decrypt the account data to get username
+	decryptedData := DecryptXOR(packet.EncryptedData)
+	username, _, err := ParseLoginData(decryptedData)
+	if err != nil {
+		log.Printf("[Protocol] Failed to parse character list data from %s: %v", clientAddr, err)
+		return CreateCharacterResponse(E_ACCOUNT_OR_PASSWORD, "Invalid request")
+	}
+	
+	log.Printf("[Protocol] Character list requested for user: %s", username)
+	
+	// Query database for characters
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	characters, err := h.db.GetCharacters(ctx, username)
+	if err != nil {
+		log.Printf("[Protocol] Database error getting characters for %s: %v", username, err)
+		return CreateCharacterResponse(ACTION_FAILED, "Database error")
+	}
+	
+	// Convert database characters to protocol format
+	var protocolChars []CharacterInfo
+	for _, char := range characters {
+		protocolChar := CharacterInfo{
+			Level:  uint16(char.Level),
+			Class:  uint8(char.Class),
+			Gender: uint8(char.Gender),
+			MapID:  uint16(char.MapID),
+			X:      uint16(char.X),
+			Y:      uint16(char.Y),
+		}
+		copy(protocolChar.Name[:], char.Name)
+		protocolChars = append(protocolChars, protocolChar)
+	}
+	
+	// Create character list response
+	response := CreateCharacterListResponse(protocolChars)
+	log.Printf("[Protocol] Character list response sent to %s (%d characters)", clientAddr, len(protocolChars))
+	return response
+}
+
+// handleCharacterDelete handles character deletion packets
+func (h *Handler) handleCharacterDelete(packet *CharacterDeletePacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Character delete request from %s", clientAddr)
+	
+	// Decrypt the character data
+	decryptedData := DecryptXOR(packet.EncryptedData)
+	log.Printf("[Protocol] Decrypted delete data: %x", decryptedData)
+	
+	// Parse character name from decrypted data
+	// For deletion, usually just the character name is sent
+	characterName := string(bytes.TrimRight(decryptedData[:32], "\x00"))
+	if len(characterName) == 0 {
+		log.Printf("[Protocol] Invalid character name in delete request from %s", clientAddr)
+		return CreateCharacterResponse(E_CHARACTER_NAME_INVALID, "Invalid character name")
+	}
+	
+	log.Printf("[Protocol] Character deletion requested for: %s", characterName)
+	
+	// Delete character from database
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	err := h.db.DeleteCharacter(ctx, characterName)
+	if err != nil {
+		log.Printf("[Protocol] Failed to delete character %s: %v", characterName, err)
+		return CreateCharacterResponse(ACTION_FAILED, "Failed to delete character")
+	}
+	
+	log.Printf("[Protocol] Character %s deleted successfully", characterName)
+	return CreateCharacterResponse(ACTION_SUCCESS, "Character deleted")
+}
+
+// Helper functions for parsing character creation data
+
+// extractCharacterName extracts character name from decrypted character creation data
+func extractCharacterName(data []byte) string {
+	// Character name is typically after username in the packet
+	// Look for the second string in the data
+	strings := extractEmbeddedStrings(data)
+	if len(strings) >= 2 {
+		// Second string is usually the character name
+		charName := strings[1]
+		if len(charName) >= 2 && len(charName) <= 32 {
+			return charName
+		}
+	}
+	
+	// Fallback: look for character name at specific offsets
+	// Based on JX1 analysis, character name might be at offset 64-96
+	if len(data) >= 96 {
+		for offset := 64; offset < 96; offset += 4 {
+			if offset+32 < len(data) {
+				name := extractStringAtOffset(data, offset, 32)
+				if len(name) >= 2 && len(name) <= 32 && isValidCharacterName(name) {
+					return name
+				}
+			}
+		}
+	}
+	
+	return ""
+}
+
+// extractCharacterClass extracts character class from creation data
+func extractCharacterClass(data []byte) int {
+	// Class is typically a single byte value
+	// Look for common class values (0-10 range for most games)
+	if len(data) >= 100 {
+		for i := 32; i < 100; i++ {
+			if data[i] >= 0 && data[i] <= 10 {
+				return int(data[i])
+			}
+		}
+	}
+	return 0 // Default class
+}
+
+// extractCharacterGender extracts character gender from creation data
+func extractCharacterGender(data []byte) int {
+	// Gender is typically 0 (male) or 1 (female)
+	if len(data) >= 100 {
+		for i := 32; i < 100; i++ {
+			if data[i] == 0 || data[i] == 1 {
+				return int(data[i])
+			}
+		}
+	}
+	return 0 // Default gender (male)
+}
+
+// isValidCharacterName checks if a character name is valid
+func isValidCharacterName(name string) bool {
+	if len(name) < 2 || len(name) > 32 {
+		return false
+	}
+	
+	// Character name should contain only letters, numbers, and some symbols
+	for _, c := range name {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || 
+			 (c >= '0' && c <= '9') || c == '_' || c == '-') {
+			return false
+		}
+	}
+	
+	return true
 }
