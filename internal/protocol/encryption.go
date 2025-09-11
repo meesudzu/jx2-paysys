@@ -49,6 +49,7 @@ func DecryptXOR(data []byte) []byte {
 }
 
 // DecryptXORWithClientAddr performs XOR decryption with client address for circuit breaker
+// Completely dynamic - no hardcoded keys for any users
 func DecryptXORWithClientAddr(data []byte, clientAddr string) []byte {
 	// Add overall timeout for the entire decryption process
 	done := make(chan []byte, 1)
@@ -60,54 +61,36 @@ func DecryptXORWithClientAddr(data []byte, clientAddr string) []byte {
 			}
 		}()
 		
+		log.Printf("[Encryption] Starting dynamic XOR key detection for %s", clientAddr)
+		
 		// Try to automatically detect the correct XOR key from repeating patterns
-		xorKey := extractXORKey(data)
+		xorKey := extractXORKeyDynamic(data)
 		
 		if len(xorKey) == 0 {
-			// If pattern extraction fails, try known keys in order of preference
-			knownKeys := [][]byte{
-				// Original key (works for "admin" user from player-login.pcap)
-				{0x45, 0x73, 0x77, 0x29, 0x2f, 0xda, 0x9a, 0x21, 0x10, 0x52, 0xb1, 0x9c, 0x70, 0x93, 0x0e, 0xa0},
-				// Tester_1 key found in tester_1_create_character_and_login_game.pcap
-				{0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad, 0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x51, 0x0e},
-				// Tester_3 key found in tester_3_create_character_and_login_game.pcap (rotated variant of tester_1)
-				{0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x50, 0x0e, 0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad},
-				// Tester_4 key found in tester_4_create_character_and_login_game.pcap
-				{0x47, 0xe7, 0x92, 0xaf, 0x28, 0xdb, 0x6e, 0x54, 0xec, 0xf7, 0x9b, 0xf7, 0xb4, 0x4d, 0xe1, 0x63},
-				// Character creation key used by multiple users for character creation packets
-				{0x63, 0xd5, 0xb8, 0xd7, 0x2b, 0x9b, 0x02, 0x2a, 0x5e, 0xc9, 0x38, 0x3f, 0x79, 0x66, 0x50, 0xda},
-			}
-			
-			// Try each known key and pick the one that gives the best result
-			bestKey := knownKeys[0] // Default to first key
-			bestScore := evaluateDecryption(data, knownKeys[0])
-			
-			for _, key := range knownKeys[1:] {
-				score := evaluateDecryption(data, key)
-				if score > bestScore {
-					bestKey = key
-					bestScore = score
-				}
-			}
-			
-			// For new users, try advanced detection methods if known keys don't work well
+			// If pattern extraction fails, use advanced detection methods
 			// Only if we haven't attempted recently (circuit breaker)
-			if bestScore < 50 && canAttemptKeyDetection(clientAddr) { // Threshold for "good enough" decryption
-				log.Printf("[Encryption] Known keys insufficient (score: %d), attempting new user key detection for %s", bestScore, clientAddr)
-				newUserKey := detectNewUserXORKey(data, clientAddr)
-				if len(newUserKey) == 16 {
-					newScore := evaluateDecryption(data, newUserKey)
-					if newScore > bestScore {
-						bestKey = newUserKey
-						bestScore = newScore
-						log.Printf("[Encryption] Detected new user XOR key: %x (score: %d)", newUserKey, newScore)
-					}
+			if canAttemptKeyDetection(clientAddr) {
+				log.Printf("[Encryption] Attempting advanced dynamic key detection for %s", clientAddr)
+				xorKey = detectNewUserXORKey(data, clientAddr)
+				if len(xorKey) == 16 {
+					score := evaluateDecryption(data, xorKey)
+					log.Printf("[Encryption] Dynamic detection found key: %x (score: %d)", xorKey, score)
 				}
-			} else if bestScore < 50 {
+			} else {
 				log.Printf("[Encryption] Skipping expensive key detection for %s due to circuit breaker", clientAddr)
 			}
-			
-			xorKey = bestKey
+		}
+		
+		// If no key found, generate a dynamic key using algorithmic approaches
+		if len(xorKey) == 0 {
+			log.Printf("[Encryption] No key found, attempting algorithmic key generation for %s", clientAddr)
+			xorKey = generateDynamicKey(data)
+		}
+		
+		// Ensure we have a valid key (fallback to null transformation if all else fails)
+		if len(xorKey) == 0 {
+			log.Printf("[Encryption] All dynamic methods failed, using null transformation for %s", clientAddr)
+			xorKey = make([]byte, 16) // All zeros - null transformation
 		}
 		
 		result := make([]byte, len(data))
@@ -124,42 +107,19 @@ func DecryptXORWithClientAddr(data []byte, clientAddr string) []byte {
 		return result
 	case <-time.After(10 * time.Second):
 		log.Printf("[Encryption] DecryptXORWithClientAddr timeout after 10 seconds for %s", clientAddr)
-		// Return data decrypted with default key as fallback
-		defaultKey := []byte{0x45, 0x73, 0x77, 0x29, 0x2f, 0xda, 0x9a, 0x21, 0x10, 0x52, 0xb1, 0x9c, 0x70, 0x93, 0x0e, 0xa0}
-		result := make([]byte, len(data))
-		for i := 0; i < len(data); i++ {
-			result[i] = data[i] ^ defaultKey[i%len(defaultKey)]
-		}
-		return result
+		// Return original data without modification as fallback
+		return data
 	}
 }
 
-// extractXORKey tries to extract the XOR key from repeating patterns
-func extractXORKey(data []byte) []byte {
-	// Look for repeating patterns that could indicate XOR encryption
-	
-	// Define all known patterns to check for
-	knownPatterns := [][]byte{
-		// Original admin pattern
-		{0x45, 0x73, 0x77, 0x29, 0x2f, 0xda, 0x9a, 0x21, 0x10, 0x52, 0xb1, 0x9c, 0x70, 0x93, 0x0e, 0xa0},
-		// Tester_1 pattern
-		{0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad, 0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x51, 0x0e},
-		// Tester_3 pattern (rotated variant)
-		{0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x50, 0x0e, 0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad},
-		// Tester_4 pattern
-		{0x47, 0xe7, 0x92, 0xaf, 0x28, 0xdb, 0x6e, 0x54, 0xec, 0xf7, 0x9b, 0xf7, 0xb4, 0x4d, 0xe1, 0x63},
-		// Character creation pattern
-		{0x63, 0xd5, 0xb8, 0xd7, 0x2b, 0x9b, 0x02, 0x2a, 0x5e, 0xc9, 0x38, 0x3f, 0x79, 0x66, 0x50, 0xda},
+// extractXORKeyDynamic tries to extract the XOR key using purely dynamic algorithms
+// No hardcoded patterns - completely algorithmic approach
+func extractXORKeyDynamic(data []byte) []byte {
+	if len(data) < 32 { // Need minimum data for analysis
+		return nil
 	}
 	
-	// Check each known pattern
-	for _, pattern := range knownPatterns {
-		if findPattern(data, pattern) {
-			return pattern
-		}
-	}
-	
-	// Method 2: Auto-detect key from repeating 16-byte patterns
+	// Method 1: Auto-detect key from repeating 16-byte patterns
 	patternCounts := make(map[string]int)
 	
 	// Look for repeating 16-byte chunks (common XOR key length)
@@ -182,28 +142,187 @@ func extractXORKey(data []byte) []byte {
 		}
 		
 		if mostCommonPattern != "" {
+			log.Printf("[Encryption] Found repeating 16-byte pattern (count: %d)", maxCount)
 			return []byte(mostCommonPattern)
 		}
+	}
+	
+	// Method 2: Statistical entropy analysis
+	// Look for byte sequences with consistent entropy patterns
+	if len(data) >= 16 {
+		candidateKey := make([]byte, 16)
+		confidence := 0
+		
+		// For each position in potential key
+		for pos := 0; pos < 16; pos++ {
+			byteFreq := make(map[byte]int)
+			
+			// Collect bytes at this position across the data
+			for i := pos; i < len(data); i += 16 {
+				byteFreq[data[i]]++
+			}
+			
+			// Find most frequent byte (likely part of repeating key)
+			var mostFreqByte byte
+			maxFreq := 0
+			for b, freq := range byteFreq {
+				if freq > maxFreq {
+					maxFreq = freq
+					mostFreqByte = b
+				}
+			}
+			
+			candidateKey[pos] = mostFreqByte
+			confidence += maxFreq
+		}
+		
+		// If we found a pattern with reasonable confidence
+		if confidence > len(data)/8 {
+			log.Printf("[Encryption] Extracted key via entropy analysis (confidence: %d)", confidence)
+			return candidateKey
+		}
+	}
+	
+	// Method 3: Look for XOR patterns against known plaintext structures
+	// Try to detect keys that would produce common login packet structures
+	candidateKey := detectKeyFromStructure(data)
+	if len(candidateKey) == 16 {
+		log.Printf("[Encryption] Extracted key via structure analysis")
+		return candidateKey
 	}
 	
 	return nil
 }
 
-// findPattern checks if a pattern exists in the data
-func findPattern(data, pattern []byte) bool {
-	for i := 0; i <= len(data)-len(pattern); i++ {
-		match := true
-		for j := 0; j < len(pattern); j++ {
-			if data[i+j] != pattern[j] {
-				match = false
-				break
+// detectKeyFromStructure tries to extract XOR key based on expected packet structure
+func detectKeyFromStructure(data []byte) []byte {
+	if len(data) < 16 {
+		return nil
+	}
+	
+	// Common login packet structures we might expect after decryption:
+	// - Packets often start with specific patterns (length fields, type fields)
+	// - Null-terminated strings at predictable offsets
+	// - Common ASCII characters in username/password fields
+	
+	candidateKey := make([]byte, 16)
+	bestScore := 0
+	
+	// Try different assumptions about the packet structure
+	structureTests := []struct {
+		offset     int
+		expectedBytes []byte
+		weight     int
+	}{
+		// Common packet header patterns
+		{0, []byte{0x00}, 5},  // Often starts with null
+		{1, []byte{0x0A}, 3},  // Common length indicator
+		{4, []byte{0x00}, 3},  // Padding bytes
+		{8, []byte{0x00}, 2},  // More padding
+	}
+	
+	for _, test := range structureTests {
+		if test.offset < len(data) && test.offset < 16 {
+			for _, expectedByte := range test.expectedBytes {
+				key_byte := data[test.offset] ^ expectedByte
+				candidateKey[test.offset] = key_byte
+				bestScore += test.weight
 			}
 		}
-		if match {
-			return true
+	}
+	
+	// Fill remaining key bytes using frequency analysis
+	for i := 0; i < 16; i++ {
+		if candidateKey[i] == 0 && bestScore < 10 { // Only if we haven't set this byte yet
+			// Use most common value at this position
+			freq := make(map[byte]int)
+			for j := i; j < len(data); j += 16 {
+				freq[data[j]]++
+			}
+			
+			var mostCommon byte
+			maxCount := 0
+			for b, count := range freq {
+				if count > maxCount {
+					maxCount = count
+					mostCommon = b
+				}
+			}
+			candidateKey[i] = mostCommon
 		}
 	}
-	return false
+	
+	// Only return if we have reasonable confidence
+	if bestScore > 5 {
+		return candidateKey
+	}
+	
+	return nil
+}
+
+// generateDynamicKey creates a key using algorithmic approaches when pattern detection fails
+func generateDynamicKey(data []byte) []byte {
+	if len(data) < 16 {
+		return nil
+	}
+	
+	candidateKey := make([]byte, 16)
+	
+	// Method 1: Use entropy-based analysis
+	for i := 0; i < 16; i++ {
+		// Collect all bytes at position i (mod 16)
+		var positionBytes []byte
+		for j := i; j < len(data); j += 16 {
+			positionBytes = append(positionBytes, data[j])
+		}
+		
+		if len(positionBytes) > 0 {
+			// Calculate the most likely XOR key byte for this position
+			// by finding the byte that would maximize ASCII printable characters
+			bestByte := byte(0)
+			bestScore := 0
+			
+			for candidate := 0; candidate < 256; candidate++ {
+				score := 0
+				for _, b := range positionBytes {
+					decrypted := b ^ byte(candidate)
+					if (decrypted >= 32 && decrypted <= 126) || decrypted == 0 {
+						score++
+					}
+				}
+				
+				if score > bestScore {
+					bestScore = score
+					bestByte = byte(candidate)
+				}
+			}
+			
+			candidateKey[i] = bestByte
+		}
+	}
+	
+	// Method 2: If entropy approach doesn't work, use differential analysis
+	score := evaluateDecryption(data, candidateKey)
+	if score < 10 {
+		// Try differential cryptanalysis approach
+		for i := 0; i < 16; i++ {
+			// Look for patterns in the differences between bytes
+			if i < len(data)-1 {
+				// Simple differential - adjust key to maximize structure
+				diff := data[i] ^ data[i+1]
+				candidateKey[i] = diff
+			}
+		}
+	}
+	
+	// Final validation
+	finalScore := evaluateDecryption(data, candidateKey)
+	if finalScore > 5 { // Very low threshold since this is last resort
+		log.Printf("[Encryption] Generated dynamic key with score: %d", finalScore)
+		return candidateKey
+	}
+	
+	return nil
 }
 
 // evaluateDecryption scores how "good" a decryption looks
@@ -246,11 +365,40 @@ func evaluateDecryption(data, key []byte) int {
 }
 
 // EncryptXOR performs XOR encryption on response data
-// Uses dynamic key selection based on detected patterns
+// Uses dynamic key selection - no hardcoded keys
 func EncryptXOR(data []byte) []byte {
-	// Use the most common key for encryption (the original key)
-	// In a real implementation, you'd want to use the same key that was used for decryption
-	xorKey := []byte{0x45, 0x73, 0x77, 0x29, 0x2f, 0xda, 0x9a, 0x21, 0x10, 0x52, 0xb1, 0x9c, 0x70, 0x93, 0x0e, 0xa0}
+	return EncryptXORWithKey(data, nil)
+}
+
+// EncryptXORWithKey performs XOR encryption with a specific key
+// If key is nil, attempts to use a learned key or generates one dynamically
+func EncryptXORWithKey(data []byte, key []byte) []byte {
+	var xorKey []byte
+	
+	if key != nil && len(key) == 16 {
+		xorKey = key
+	} else {
+		// Try to get a previously learned key (from the most recent successful decryption)
+		// In a more sophisticated implementation, this could be context-aware
+		xorKey = getLastUsedKey()
+		
+		if len(xorKey) == 0 {
+			// Generate a dynamic key for encryption
+			// For responses, we can use a simple algorithmic key
+			xorKey = generateResponseKey(data)
+		}
+	}
+	
+	// Ensure we have a valid key
+	if len(xorKey) == 0 {
+		// Last resort: use a computed key based on data characteristics
+		xorKey = make([]byte, 16)
+		for i := 0; i < 16; i++ {
+			// Use a simple hash of the data position
+			xorKey[i] = byte((i + len(data)) % 256)
+		}
+		log.Printf("[Encryption] Using computed fallback key for encryption")
+	}
 	
 	result := make([]byte, len(data))
 	for i := 0; i < len(data); i++ {
@@ -668,7 +816,60 @@ func extractStringAtOffset(data []byte, offset, maxLen int) string {
 	return ""
 }
 
-// CreateEncryptedLoginResponse creates an encrypted login response
+// Last used key storage for encryption consistency
+var (
+	lastUsedKey     []byte
+	lastUsedKeyMu   sync.RWMutex
+)
+
+// setLastUsedKey stores the key that was successfully used for decryption
+func setLastUsedKey(key []byte) {
+	if len(key) == 16 {
+		lastUsedKeyMu.Lock()
+		lastUsedKey = make([]byte, 16)
+		copy(lastUsedKey, key)
+		lastUsedKeyMu.Unlock()
+	}
+}
+
+// getLastUsedKey retrieves the most recently used key for encryption
+func getLastUsedKey() []byte {
+	lastUsedKeyMu.RLock()
+	defer lastUsedKeyMu.RUnlock()
+	
+	if len(lastUsedKey) == 16 {
+		result := make([]byte, 16)
+		copy(result, lastUsedKey)
+		return result
+	}
+	
+	return nil
+}
+
+// generateResponseKey creates a dynamic key for response encryption
+func generateResponseKey(data []byte) []byte {
+	key := make([]byte, 16)
+	
+	// Method 1: Use data characteristics to generate key
+	if len(data) > 0 {
+		// Create key based on data content and length
+		seed := uint32(len(data))
+		for i := 0; i < 16; i++ {
+			// Simple linear congruential generator for key generation
+			seed = (seed*1103515245 + 12345) % (1 << 31)
+			key[i] = byte(seed % 256)
+		}
+	} else {
+		// Method 2: Time-based key generation as fallback
+		now := time.Now().UnixNano()
+		for i := 0; i < 16; i++ {
+			key[i] = byte((now >> (i * 4)) % 256)
+		}
+	}
+	
+	log.Printf("[Encryption] Generated response key: %x", key)
+	return key
+}
 func CreateEncryptedLoginResponse(result uint8, message string) []byte {
 	// Create response data
 	responseData := make([]byte, 0, 256)
@@ -903,17 +1104,29 @@ func detectKeyByFrequencyAnalysis(data []byte) []byte {
 	return detectKeyByFrequencyAnalysisWithTimeout(ctx, data)
 }
 
-// deriveKeyFromKnownPatternsWithTimeout tries to derive new keys based on patterns from known keys with timeout
+// deriveKeyFromKnownPatternsWithTimeout tries to derive new keys based on dynamic analysis with timeout
+// No hardcoded keys - uses algorithmic pattern generation
 func deriveKeyFromKnownPatternsWithTimeout(ctx context.Context, data []byte) []byte {
-	knownKeys := [][]byte{
-		{0x45, 0x73, 0x77, 0x29, 0x2f, 0xda, 0x9a, 0x21, 0x10, 0x52, 0xb1, 0x9c, 0x70, 0x93, 0x0e, 0xa0},
-		{0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad, 0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x51, 0x0e},
-		{0xad, 0x69, 0x2b, 0xa7, 0x9d, 0x67, 0x0c, 0x50, 0x0e, 0xa5, 0xae, 0xc3, 0x17, 0xfb, 0xa5, 0xad},
-		{0x47, 0xe7, 0x92, 0xaf, 0x28, 0xdb, 0x6e, 0x54, 0xec, 0xf7, 0x9b, 0xf7, 0xb4, 0x4d, 0xe1, 0x63},
+	if len(data) < 16 {
+		return nil
 	}
 	
-	// Try variations of known keys (rotations, byte shifts, etc.)
-	for _, baseKey := range knownKeys {
+	log.Printf("[Encryption] Starting pattern-based key derivation (dynamic)")
+	
+	// Method 1: Generate candidate keys using rotational patterns
+	baseKey := make([]byte, 16)
+	
+	// Create a base pattern from the data itself
+	for i := 0; i < 16; i++ {
+		if i < len(data) {
+			baseKey[i] = data[i % len(data)]
+		} else {
+			baseKey[i] = byte(i) // Fallback pattern
+		}
+	}
+	
+	// Try rotations of the base pattern
+	for shift := 1; shift < 16; shift += 2 { // Test every other rotation
 		// Check for timeout
 		select {
 		case <-ctx.Done():
@@ -921,45 +1134,123 @@ func deriveKeyFromKnownPatternsWithTimeout(ctx context.Context, data []byte) []b
 		default:
 		}
 		
-		// Try rotations (optimized: fewer rotations)
-		for shift := 1; shift < 16; shift += 2 { // Test every other rotation
-			candidateKey := make([]byte, 16)
-			for i := 0; i < 16; i++ {
-				candidateKey[i] = baseKey[(i+shift)%16]
-			}
-			
-			if evaluateDecryption(data, candidateKey) > 30 {
-				return candidateKey
-			}
+		candidateKey := make([]byte, 16)
+		for i := 0; i < 16; i++ {
+			candidateKey[i] = baseKey[(i+shift)%16]
 		}
 		
-		// Try bit shifts (optimized: fewer shifts)
-		for shift := 1; shift < 8; shift += 2 { // Test every other shift
-			candidateKey := make([]byte, 16)
-			for i := 0; i < 16; i++ {
-				candidateKey[i] = baseKey[i] << shift | baseKey[i] >> (8-shift)
-			}
-			
-			if evaluateDecryption(data, candidateKey) > 30 {
-				return candidateKey
-			}
+		if evaluateDecryption(data, candidateKey) > 30 {
+			log.Printf("[Encryption] Found key via rotation (shift: %d)", shift)
+			return candidateKey
+		}
+	}
+	
+	// Method 2: Bit manipulation patterns
+	for shift := 1; shift < 8; shift += 2 { // Test every other shift
+		// Check for timeout
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
 		}
 		
-		// Try byte-wise XOR with simple patterns (optimized: fewer patterns)
-		patterns := []byte{0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF}
-		for _, pattern := range patterns {
-			candidateKey := make([]byte, 16)
-			for i := 0; i < 16; i++ {
-				candidateKey[i] = baseKey[i] ^ pattern
-			}
-			
-			if evaluateDecryption(data, candidateKey) > 30 {
-				return candidateKey
-			}
+		candidateKey := make([]byte, 16)
+		for i := 0; i < 16; i++ {
+			candidateKey[i] = baseKey[i] << shift | baseKey[i] >> (8-shift)
+		}
+		
+		if evaluateDecryption(data, candidateKey) > 30 {
+			log.Printf("[Encryption] Found key via bit shift (shift: %d)", shift)
+			return candidateKey
+		}
+	}
+	
+	// Method 3: XOR with algorithmic patterns
+	patterns := []byte{0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF, 0xAA, 0x55}
+	for _, pattern := range patterns {
+		// Check for timeout
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		
+		candidateKey := make([]byte, 16)
+		for i := 0; i < 16; i++ {
+			candidateKey[i] = baseKey[i] ^ pattern
+		}
+		
+		if evaluateDecryption(data, candidateKey) > 30 {
+			log.Printf("[Encryption] Found key via XOR pattern (0x%02X)", pattern)
+			return candidateKey
+		}
+	}
+	
+	// Method 4: Frequency-based pattern derivation
+	candidateKey := deriveFromFrequencyAnalysis(data)
+	if len(candidateKey) == 16 {
+		score := evaluateDecryption(data, candidateKey)
+		if score > 25 {
+			log.Printf("[Encryption] Found key via frequency derivation (score: %d)", score)
+			return candidateKey
 		}
 	}
 	
 	return nil
+}
+
+// deriveFromFrequencyAnalysis creates a key based on byte frequency patterns
+func deriveFromFrequencyAnalysis(data []byte) []byte {
+	if len(data) < 16 {
+		return nil
+	}
+	
+	candidateKey := make([]byte, 16)
+	
+	// For each key position, find the byte value that maximizes expected plaintext
+	for pos := 0; pos < 16; pos++ {
+		byteScores := make(map[byte]int)
+		
+		// Analyze all bytes at this position
+		for i := pos; i < len(data); i += 16 {
+			currentByte := data[i]
+			
+			// Try each possible key byte
+			for keyByte := 0; keyByte < 256; keyByte++ {
+				decrypted := currentByte ^ byte(keyByte)
+				
+				// Score based on likelihood of being meaningful plaintext
+				score := 0
+				if decrypted >= 'a' && decrypted <= 'z' {
+					score = 5 // Lowercase letters
+				} else if decrypted >= 'A' && decrypted <= 'Z' {
+					score = 4 // Uppercase letters
+				} else if decrypted >= '0' && decrypted <= '9' {
+					score = 3 // Numbers
+				} else if decrypted == 0 || decrypted == ' ' {
+					score = 2 // Null/space
+				} else if decrypted >= 32 && decrypted <= 126 {
+					score = 1 // Other printable
+				}
+				
+				byteScores[byte(keyByte)] += score
+			}
+		}
+		
+		// Find the key byte with the highest score
+		bestByte := byte(0)
+		bestScore := 0
+		for keyByte, score := range byteScores {
+			if score > bestScore {
+				bestScore = score
+				bestByte = keyByte
+			}
+		}
+		
+		candidateKey[pos] = bestByte
+	}
+	
+	return candidateKey
 }
 
 // deriveKeyFromKnownPatterns tries to derive new keys based on patterns from known keys (deprecated)
@@ -1214,6 +1505,7 @@ func getLearnedKey(username string) []byte {
 }
 
 // DecryptXORWithUsername performs XOR decryption with username-aware key learning
+// Completely dynamic approach with key storage for encryption consistency
 func DecryptXORWithUsername(data []byte, username string) ([]byte, []byte) {
 	// First, try any previously learned key for this user
 	if username != "" {
@@ -1225,19 +1517,27 @@ func DecryptXORWithUsername(data []byte, username string) ([]byte, []byte) {
 				for i := 0; i < len(data); i++ {
 					result[i] = data[i] ^ learnedKey[i%len(learnedKey)]
 				}
+				
+				// Store this key as the last used key for encryption consistency
+				setLastUsedKey(learnedKey)
 				return result, learnedKey
 			}
 		}
 	}
 	
-	// Fall back to regular decryption
+	// Fall back to dynamic decryption
 	result := DecryptXOR(data)
 	
 	// Try to extract the key that was used for learning
 	usedKey := extractActualXORKey(data, result)
-	if len(usedKey) == 16 && username != "" {
-		// Learn this key for future use
-		learnXORKey(username, usedKey)
+	if len(usedKey) == 16 {
+		// Store this key as the last used key for encryption consistency
+		setLastUsedKey(usedKey)
+		
+		if username != "" {
+			// Learn this key for future use
+			learnXORKey(username, usedKey)
+		}
 		return result, usedKey
 	}
 	
