@@ -12,13 +12,79 @@ The JX2 paysys uses a TCP-based binary protocol with the following characteristi
 - **Encryption**: XOR cipher with fixed 16-byte key
 - **Packet Structure**: [Size:2][Type:2][Data:Variable]
 
-### XOR Encryption Key
+### XOR Encryption Keys
 
+The JX2 paysys protocol uses XOR encryption with multiple user-specific keys:
+
+#### Admin Key (16 bytes)
 ```
 45 73 77 29 2F DA 9A 21 10 52 B1 9C 70 93 0E A0
 ```
+Used for admin logins. Found in original `player-login.pcap`.
 
-This 16-byte key repeats for longer data blocks.
+#### Tester_1 Key (16 bytes)  
+```
+A5 AE C3 17 FB A5 AD AD 69 2B A7 9D 67 0C 51 0E
+```
+Used for tester_1 logins. Found in `tester_1_create_character_and_login_game.pcap`.
+
+#### Tester_3 Key (16 bytes)
+```
+AD 69 2B A7 9D 67 0C 50 0E A5 AE C3 17 FB A5 AD
+```
+Used for tester_3 logins. Found in `tester_3_create_character_and_login_game.pcap`.
+This is a rotated variant of the tester_1 key.
+
+#### Tester_4 Key (16 bytes)
+```
+47 E7 92 AF 28 DB 6E 54 EC F7 9B F7 B4 4D E1 63
+```
+Used for tester_4 logins. Found in `tester_4_create_character_and_login_game.pcap`.
+
+#### Character Creation Key (16 bytes)
+```
+63 D5 B8 D7 2B 9B 02 2A 5E C9 38 3F 79 66 50 DA
+```
+Used for character creation packets across multiple users.
+
+#### Multi-User Encryption System
+
+The protocol demonstrates that **different users have different XOR keys**. The implementation includes:
+
+- **Automatic Key Detection**: Pattern-based extraction from repeating 16-byte chunks
+- **Quality Scoring**: Evaluates decryption results to select the best key
+- **Fallback Mechanism**: Uses known keys if auto-detection fails  
+- **User-Specific Keys**: Each user account may have a unique encryption key
+
+#### Advanced New User Support
+
+The enhanced implementation provides comprehensive support for new users with unknown XOR keys:
+
+**Key Detection Methods**:
+- **Statistical Frequency Analysis**: Uses byte frequency patterns to detect XOR encryption signatures
+- **Pattern-Based Derivation**: Derives keys from known key structures and variations
+- **Brute Force Common Patterns**: Tests common XOR key patterns and sequences
+- **Login Structure Analysis**: Analyzes known login data structure to reverse-engineer keys
+
+**Key Learning System**:
+- **Dynamic Key Storage**: Automatically learns and stores new user keys for future logins
+- **Persistent Storage**: Saves discovered keys to `/tmp/learned_keys.txt` for session persistence
+- **Username Association**: Associates XOR keys with specific usernames for efficient retrieval
+- **Confidence Scoring**: Only learns keys that demonstrate high decryption confidence (score > 50)
+
+**Enhanced Login Parsing**:
+- **Multi-Method Parsing**: Uses 4 different parsing methods for robust username/password extraction
+- **Advanced String Extraction**: More aggressive ASCII string detection for partially decrypted data
+- **Pattern Recognition**: Identifies MD5 hash patterns and structured login data
+- **Noise Tolerance**: Handles imperfect decryption by focusing on high-confidence string regions
+
+**Usage Example**:
+```go
+// For new users, the system automatically:
+decrypted, learnedKey := protocol.DecryptXORWithUsername(encryptedData, "newuser")
+username, password, err := protocol.ParseLoginData(decrypted)
+// System learns and stores the XOR key for "newuser" for future logins
+```
 
 ### Packet Types
 
@@ -114,6 +180,71 @@ Offset | Size | Field   | Description
 - 3: Invalid credentials
 - 4: Account suspended
 
+#### Character Creation (0xDDFF)
+
+**Purpose**: Character creation request
+
+**Structure**:
+```
+Offset | Size | Field         | Description
+-------|------|---------------|------------------
+0x00   | 2    | Size          | Total packet size (229 bytes)
+0x02   | 2    | Type          | Packet type (0xDDFF)
+0x04   | 225  | EncryptedData | XOR encrypted character data
+```
+
+#### Player Verification (0x26FF)
+
+**Purpose**: Player verification during login sequence
+
+**Structure**:
+```
+Offset | Size | Field | Description
+-------|------|-------|------------------
+0x00   | 2    | Size  | Total packet size (7 bytes)
+0x02   | 2    | Type  | Packet type (0x26FF)
+0x04   | 3    | Data  | Verification data
+```
+
+#### Character Selection (0x50FF)
+
+**Purpose**: Character selection request
+
+**Structure**:
+```
+Offset | Size | Field | Description
+-------|------|-------|------------------
+0x00   | 2    | Size  | Total packet size (7 bytes)
+0x02   | 2    | Type  | Packet type (0x50FF)
+0x04   | 3    | Data  | Selection data
+```
+
+#### Character Data (0xDBFF)
+
+**Purpose**: Character data exchange
+
+**Structure**:
+```
+Offset | Size | Field         | Description
+-------|------|---------------|------------------
+0x00   | 2    | Size          | Total packet size (61 bytes)
+0x02   | 2    | Type          | Packet type (0xDBFF)
+0x04   | 57   | EncryptedData | XOR encrypted character info
+```
+
+#### Session Confirmation (0x9DFF)
+
+**Purpose**: Alternative session confirmation
+
+**Structure**:
+```
+Offset | Size | Field         | Description
+-------|------|---------------|------------------
+0x00   | 2    | Size          | Total packet size (47 bytes)
+0x02   | 2    | Type          | Packet type (0x9DFF)
+0x04   | 43   | EncryptedData | XOR encrypted session data
+```
+
 ### Network Flow
 
 #### Bishop Connection Flow
@@ -123,6 +254,18 @@ Offset | Size | Field   | Description
 #### User Login Flow  
 1. Client → Paysys: User Login (0x42FF) with encrypted credentials
 2. Paysys → Client: User Response (0xA8FF) with encrypted result
+
+#### Character Management Flow
+1. Client → Paysys: Player Verification (0x26FF)
+2. Paysys → Client: Verification Response
+3. Client → Paysys: Character Creation (0xDDFF) with encrypted character data
+4. Paysys → Client: Creation Response
+5. Client → Paysys: Character Selection (0x50FF)
+6. Paysys → Client: Selection Response
+7. Client → Paysys: Character Data (0xDBFF) with encrypted character info
+8. Paysys → Client: Character Data Response
+9. Client → Paysys: Session Confirmation (0x9DFF)
+10. Paysys → Client: (No response required)
 
 ### Implementation Notes
 
@@ -134,10 +277,11 @@ Offset | Size | Field   | Description
 
 ### Security Considerations
 
-1. **Weak Encryption**: XOR with fixed key provides minimal security
-2. **MD5 Hashing**: Deprecated hash algorithm, vulnerable to collisions  
-3. **No TLS**: Protocol transmits encrypted credentials over plain TCP
-4. **Key Reuse**: Same XOR key used for all communications
+1. **Multi-User XOR Encryption**: Each user has a unique 16-byte XOR key
+2. **Key Reuse**: Same key used for all communications from the same user
+3. **MD5 Hashing**: Deprecated hash algorithm, vulnerable to collisions  
+4. **No TLS**: Protocol transmits encrypted credentials over plain TCP
+5. **Pattern Analysis**: XOR keys can be extracted through traffic analysis
 
 ### Testing
 
