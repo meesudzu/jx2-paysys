@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -45,6 +46,19 @@ func init() {
 // DecryptXORFast performs fast XOR decryption using cached/known patterns only
 // Returns nil if no fast path is available (triggers background learning)
 func DecryptXORFast(data []byte, clientAddr string) []byte {
+	// Check for Bishop protocol format: first 32 bytes = XOR key repeated, then plain text data
+	if len(data) > 32 {
+		// Check if first 32 bytes contain a repeated 16-byte pattern (XOR key header)
+		if len(data) >= 32 && bytes.Equal(data[0:16], data[16:32]) {
+			// This is Bishop protocol format - data after byte 32 is plain text
+			loginData := data[32:]
+			if hasValidLoginPattern(loginData) {
+				log.Printf("[Encryption] Bishop protocol format detected for %s - login data is plain text", clientAddr)
+				return loginData
+			}
+		}
+	}
+	
 	// Check learned keys cache first
 	learnedKeysMu.RLock()
 	for username, cachedKey := range learnedKeys {
