@@ -42,6 +42,227 @@ func init() {
 	}()
 }
 
+// DecryptXORFast performs fast XOR decryption using cached/known patterns only
+// Returns nil if no fast path is available (triggers background learning)
+func DecryptXORFast(data []byte, clientAddr string) []byte {
+	// Check learned keys cache first
+	learnedKeysMu.RLock()
+	for username, cachedKey := range learnedKeys {
+		result := make([]byte, len(data))
+		for i := 0; i < len(data); i++ {
+			result[i] = data[i] ^ cachedKey[i%len(cachedKey)]
+		}
+		
+		// Quick validation - look for readable ASCII patterns
+		if hasValidLoginPattern(result) {
+			learnedKeysMu.RUnlock()
+			log.Printf("[Encryption] Fast decryption successful using cached key for user %s", username)
+			return result
+		}
+	}
+	learnedKeysMu.RUnlock()
+	
+	// Quick pattern extraction (max 500ms for Bishop compatibility)
+	fastKey := extractXORKeyDynamicFast(data)
+	if fastKey != nil {
+		result := make([]byte, len(data))
+		for i := 0; i < len(data); i++ {
+			result[i] = data[i] ^ fastKey[i%len(fastKey)]
+		}
+		
+		if hasValidLoginPattern(result) {
+			log.Printf("[Encryption] Fast pattern extraction successful for %s", clientAddr)
+			return result
+		}
+	}
+	
+	// Fast path failed
+	return nil
+}
+
+// extractXORKeyDynamicFast is an optimized version for real-time use
+func extractXORKeyDynamicFast(data []byte) []byte {
+	if len(data) < 32 {
+		return nil
+	}
+	
+	// Fast pattern detection - only check most likely positions
+	for i := 0; i <= len(data)-32; i += 16 { // Skip by 16-byte chunks
+		if i+32 <= len(data) {
+			pattern1 := data[i : i+16]
+			pattern2 := data[i+16 : i+32]
+			
+			// Check if patterns look like potential XOR keys
+			if bytesLookEncrypted(pattern1) && bytesLookEncrypted(pattern2) {
+				// Quick entropy check
+				if hasReasonableEntropy(pattern1) {
+					return pattern1
+				}
+			}
+		}
+	}
+	
+	return nil
+}
+
+// hasValidLoginPattern checks if decrypted data looks like valid login data
+func hasValidLoginPattern(data []byte) bool {
+	if len(data) < 16 {
+		return false
+	}
+	
+	// Look for common patterns in login data:
+	// - ASCII characters
+	// - Common username/password patterns
+	// - MD5 hash patterns (32 hex chars)
+	
+	asciiCount := 0
+	hexCount := 0
+	
+	for i, b := range data {
+		if i > 64 { // Don't check entire buffer for speed
+			break
+		}
+		
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') {
+			asciiCount++
+		}
+		
+		if (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F') {
+			hexCount++
+		}
+	}
+	
+	// Reasonable ASCII content or hex patterns (MD5 hash)
+	return asciiCount > 8 || hexCount > 20
+}
+
+// ParseLoginDataFast is an optimized version of ParseLoginData for fast path
+func ParseLoginDataFast(data []byte) (string, string, error) {
+	if len(data) < 8 {
+		return "", "", fmt.Errorf("data too short for fast parsing")
+	}
+	
+	// Convert to string and look for common patterns quickly
+	str := string(data)
+	
+	// Method 1: Look for null-separated strings (most common)
+	parts := strings.Split(str, "\x00")
+	if len(parts) >= 2 {
+		username := strings.TrimSpace(parts[0])
+		password := strings.TrimSpace(parts[1])
+		
+		if len(username) > 0 && len(password) > 0 && len(username) < 32 && len(password) < 64 {
+			// Basic validation - alphanumeric usernames, hex passwords (MD5)
+			if isValidUsername(username) && isValidPassword(password) {
+				return username, password, nil
+			}
+		}
+	}
+	
+	// Method 2: Fixed positions (some client versions)
+	if len(data) >= 64 {
+		// Try extracting from common positions
+		username := extractStringFromPosition(data, 0, 16)
+		password := extractStringFromPosition(data, 16, 48)
+		
+		if len(username) > 0 && len(password) > 0 && isValidUsername(username) && isValidPassword(password) {
+			return username, password, nil
+		}
+	}
+	
+	return "", "", fmt.Errorf("fast parsing failed")
+}
+
+// Helper functions for fast validation
+func isValidUsername(username string) bool {
+	if len(username) < 3 || len(username) > 16 {
+		return false
+	}
+	
+	for _, r := range username {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidPassword(password string) bool {
+	if len(password) < 8 {
+		return false
+	}
+	
+	// Check for MD5 hash pattern (32 hex characters)
+	if len(password) == 32 {
+		for _, r := range password {
+			if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+				return false
+			}
+		}
+		return true
+	}
+	
+	// Other password formats
+	return len(password) >= 8 && len(password) <= 64
+}
+
+func extractStringFromPosition(data []byte, start, maxLen int) string {
+	if start >= len(data) {
+		return ""
+	}
+	
+	end := start
+	for end < len(data) && end < start+maxLen && data[end] != 0 {
+		if data[end] < 32 || data[end] > 126 { // Non-printable
+			break
+		}
+		end++
+	}
+	
+	if end > start {
+		return string(data[start:end])
+	}
+	return ""
+}
+
+func hasReasonableEntropy(data []byte) bool {
+	if len(data) < 8 {
+		return false
+	}
+	
+	freq := make([]int, 256)
+	for _, b := range data {
+		freq[b]++
+	}
+	
+	// Count non-zero frequencies
+	nonZero := 0
+	for _, f := range freq {
+		if f > 0 {
+			nonZero++
+		}
+	}
+	
+	// Good entropy has many different byte values
+	return nonZero >= len(data)/2
+}
+
+func bytesLookEncrypted(data []byte) bool {
+	// Very basic check - encrypted data usually has reasonable entropy
+	if len(data) < 8 {
+		return false
+	}
+	
+	var sum int
+	for _, b := range data[:8] {
+		sum += int(b)
+	}
+	
+	avg := sum / 8
+	return avg > 32 && avg < 200 // Reasonable range for encrypted data
+}
+
 // DecryptXOR performs XOR decryption on login data
 // Enhanced to handle multiple encryption keys found in different user scenarios and new users
 func DecryptXOR(data []byte) []byte {
@@ -727,52 +948,6 @@ func extractEmbeddedStrings(data []byte) []string {
 	}
 	
 	return strings
-}
-
-// isValidUsername checks if a string looks like a valid username
-func isValidUsername(s string) bool {
-	if len(s) < 2 || len(s) > 32 {
-		return false
-	}
-	
-	// Username should contain only alphanumeric characters and common symbols
-	for _, c := range s {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || 
-			 (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.') {
-			return false
-		}
-	}
-	
-	return true
-}
-
-// isValidPassword checks if a string looks like a valid password
-func isValidPassword(s string) bool {
-	if len(s) < 4 || len(s) > 64 {
-		return false
-	}
-	
-	// Check for MD5 hash pattern (32 hex chars)
-	if len(s) == 32 && isHexString(s) {
-		return true
-	}
-	
-	// Check for reasonable password characters
-	hasAlpha := false
-	hasDigit := false
-	
-	for _, c := range s {
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
-			hasAlpha = true
-		} else if c >= '0' && c <= '9' {
-			hasDigit = true
-		} else if !((c >= 33 && c <= 47) || (c >= 58 && c <= 64) || 
-				   (c >= 91 && c <= 96) || (c >= 123 && c <= 126)) {
-			return false // Invalid password character
-		}
-	}
-	
-	return hasAlpha || hasDigit
 }
 
 // isHexString checks if a string contains only hexadecimal characters
