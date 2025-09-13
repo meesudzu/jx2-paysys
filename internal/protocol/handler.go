@@ -213,6 +213,13 @@ func (h *Handler) handleBishopPacket(conn net.Conn, data []byte, clientAddr stri
 func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 	log.Printf("[Protocol] Bishop session established for %s", clientAddr)
 	
+	// Enable TCP keep-alive to prevent connection drops during authentication
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(5 * time.Second)
+		log.Printf("[Protocol] TCP keep-alive enabled for Bishop session %s", clientAddr)
+	}
+	
 	// Keep reading for additional packets and handle session state
 	buffer := make([]byte, 4096)
 	sessionStart := time.Now()
@@ -225,8 +232,8 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 			break
 		}
 		
-		// Set aggressive timeout for Bishop sessions to prevent hanging (reduced to 30 seconds)
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		// Set optimized timeout for Bishop sessions - faster response for ProcessVerifyReplyFromPaysys
+		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 		n, err := conn.Read(buffer)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -278,71 +285,18 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 				// 229-byte packet during Bishop session - this is ProcessVerifyReplyFromPaysys request
 				log.Printf("[Protocol] Bishop ProcessVerifyReplyFromPaysys request detected (%d bytes)", n)
 				
-				// Check if this is the hybrid protocol format first
-				if len(data) >= 32 && bytes.Equal(data[0:16], data[16:32]) {
-					// Hybrid format: first 32 bytes = XOR key repeated, then plain text data
-					log.Printf("[Protocol] Hybrid protocol format detected - extracting login from plain text")
-					xorKeyHeader := data[0:16]
-					loginData := data[32:]
+				// IMMEDIATE RESPONSE: Send response immediately to prevent timeout
+				// This is critical to prevent Bishop from timing out during authentication
+				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("[Protocol] Recovered from panic in immediate Bishop response: %v", r)
+						}
+					}()
 					
-					log.Printf("[Protocol] XOR key header: %x", xorKeyHeader)
-					log.Printf("[Protocol] Login data: %x", loginData)
-					log.Printf("[Protocol] Login data as text: %q", string(loginData))
-					
-					// Parse username and password from plain text data
-					username, password, err := ParseLoginDataFast(loginData)
-					if err != nil {
-						log.Printf("[Protocol] Failed to parse hybrid login data: %v", err)
-						// Send failure response
-						failResponse := CreateBishopVerifyResponse(3, "Parse error")
-						conn.Write(failResponse)
-					} else {
-						log.Printf("[Protocol] Hybrid format - Username: %s, Password: %s", username, password)
-						
-						// Perform actual authentication
-						authSuccess := h.authenticateUser(username, password, clientAddr)
-						if authSuccess {
-							log.Printf("[Protocol] Authentication successful for %s", username)
-							successResponse := CreateBishopVerifyResponse(0, "Login successful")
-							_, err := conn.Write(successResponse)
-							if err != nil {
-								log.Printf("[Protocol] Failed to send Bishop success response: %v", err)
-							} else {
-								log.Printf("[Protocol] Bishop ProcessVerifyReplyFromPaysys response sent successfully")
-							}
-						} else {
-							log.Printf("[Protocol] Authentication failed for %s", username)
-							failResponse := CreateBishopVerifyResponse(3, "Authentication failed")
-							conn.Write(failResponse)
-						}
-					}
-				} else {
-					// Standard encrypted format - handle normally
-					packet, err := ParsePacket(data)
-					if err != nil {
-						log.Printf("[Protocol] Error parsing 229-byte packet in Bishop session: %v", err)
-						failResponse := CreateBishopVerifyResponse(2, "Parse error")
-						conn.Write(failResponse)
-					} else if p, ok := packet.(*UserLoginPacket); ok {
-						// Protocol 0x42ff - traditional user login
-						log.Printf("[Protocol] User login packet (0x42ff) in Bishop session %s", clientAddr)
-						response := h.handleUserLoginForBishop(p, clientAddr)
-						if response != nil {
-							conn.Write(response)
-						}
-					} else if p, ok := packet.(*GameLoginPacket); ok {
-						// Protocol 0xe0ff - player identity verification (matches JavaScript implementation)
-						log.Printf("[Protocol] Player identity verification packet (0xe0ff) in Bishop session %s", clientAddr)
-						response := h.handlePlayerIdentityVerification(p, clientAddr)
-						if response != nil {
-							conn.Write(response)
-						}
-					} else {
-						log.Printf("[Protocol] Failed to cast 229-byte packet to known type in Bishop session")
-						failResponse := CreateBishopVerifyResponse(2, "Unknown packet type")
-						conn.Write(failResponse)
-					}
-				}
+					// Process authentication with immediate response mechanism
+					h.handleBishopVerifyRequestImmediate(conn, data, clientAddr)
+				}()
 			} else if n == 47 {
 				// Session confirmation packet (0x14ff) - comes after player identity verification
 				log.Printf("[Protocol] Session confirmation packet in Bishop session %s", clientAddr)
@@ -1141,5 +1095,106 @@ func (h *Handler) handleUserLoginForBishop(packet *UserLoginPacket, clientAddr s
 	} else {
 		log.Printf("[Protocol] Bishop authentication failed for %s", username)
 		return CreateBishopVerifyResponse(3, "Authentication failed")
+	}
+}
+
+// handleBishopVerifyRequestImmediate processes Bishop verification with immediate response to prevent timeout
+func (h *Handler) handleBishopVerifyRequestImmediate(conn net.Conn, data []byte, clientAddr string) {
+	log.Printf("[Protocol] Processing Bishop verify request with immediate response mechanism")
+	
+	// Send immediate ACK to prevent timeout while processing
+	immediateAck := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK
+	_, err := conn.Write(immediateAck)
+	if err != nil {
+		log.Printf("[Protocol] Failed to send immediate ACK: %v", err)
+		return
+	}
+	log.Printf("[Protocol] Immediate ACK sent to prevent timeout")
+	
+	// Create a context with timeout for authentication processing
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	
+	// Process authentication asynchronously
+	resultChan := make(chan []byte, 1)
+	
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[Protocol] Recovered from panic in auth processing: %v", r)
+				resultChan <- CreateBishopVerifyResponse(2, "Internal error")
+			}
+		}()
+		
+		var response []byte
+		
+		// Check if this is the hybrid protocol format first
+		if len(data) >= 32 && bytes.Equal(data[0:16], data[16:32]) {
+			// Hybrid format: first 32 bytes = XOR key repeated, then plain text data
+			log.Printf("[Protocol] Hybrid protocol format detected - extracting login from plain text")
+			xorKeyHeader := data[0:16]
+			loginData := data[32:]
+			
+			log.Printf("[Protocol] XOR key header: %x", xorKeyHeader)
+			log.Printf("[Protocol] Login data: %x", loginData)
+			log.Printf("[Protocol] Login data as text: %q", string(loginData))
+			
+			// Parse username and password from plain text data
+			username, password, err := ParseLoginDataFast(loginData)
+			if err != nil {
+				log.Printf("[Protocol] Failed to parse hybrid login data: %v", err)
+				response = CreateBishopVerifyResponse(3, "Parse error")
+			} else {
+				log.Printf("[Protocol] Hybrid format - Username: %s, Password: %s", username, password)
+				
+				// Perform actual authentication
+				authSuccess := h.authenticateUser(username, password, clientAddr)
+				if authSuccess {
+					log.Printf("[Protocol] Authentication successful for %s", username)
+					response = CreateBishopVerifyResponse(0, "Login successful")
+				} else {
+					log.Printf("[Protocol] Authentication failed for %s", username)
+					response = CreateBishopVerifyResponse(3, "Authentication failed")
+				}
+			}
+		} else {
+			// Standard encrypted format - handle normally
+			packet, err := ParsePacket(data)
+			if err != nil {
+				log.Printf("[Protocol] Error parsing 229-byte packet: %v", err)
+				response = CreateBishopVerifyResponse(2, "Parse error")
+			} else if p, ok := packet.(*UserLoginPacket); ok {
+				// Protocol 0x42ff - traditional user login
+				log.Printf("[Protocol] User login packet (0x42ff) in immediate handler")
+				response = h.handleUserLoginForBishop(p, clientAddr)
+			} else if p, ok := packet.(*GameLoginPacket); ok {
+				// Protocol 0xe0ff - player identity verification
+				log.Printf("[Protocol] Player identity verification packet (0xe0ff) in immediate handler")
+				response = h.handlePlayerIdentityVerification(p, clientAddr)
+			} else {
+				log.Printf("[Protocol] Unknown packet type in immediate handler")
+				response = CreateBishopVerifyResponse(2, "Unknown packet type")
+			}
+		}
+		
+		if response != nil {
+			resultChan <- response
+		}
+	}()
+	
+	// Wait for result with timeout
+	select {
+	case response := <-resultChan:
+		log.Printf("[Protocol] Sending final Bishop verification response")
+		_, err = conn.Write(response)
+		if err != nil {
+			log.Printf("[Protocol] Failed to send Bishop verification response: %v", err)
+		} else {
+			log.Printf("[Protocol] Bishop ProcessVerifyReplyFromPaysys response sent successfully (immediate mode)")
+		}
+	case <-ctx.Done():
+		log.Printf("[Protocol] Bishop verification timeout, sending failure response")
+		timeoutResponse := CreateBishopVerifyResponse(2, "Authentication timeout")
+		conn.Write(timeoutResponse)
 	}
 }
