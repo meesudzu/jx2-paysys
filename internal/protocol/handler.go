@@ -275,30 +275,73 @@ func (h *Handler) handleBishopSession(conn net.Conn, clientAddr string) {
 					conn.Write(ackResponse)
 				}
 			} else if n == 229 {
-				// 229-byte packet during Bishop session - could be user login (0x42ff) or player identity verification (0xe0ff)
-				packet, err := ParsePacket(data)
-				if err != nil {
-					log.Printf("[Protocol] Error parsing 229-byte packet in Bishop session: %v", err)
-					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
-					conn.Write(ackResponse)
-				} else if p, ok := packet.(*UserLoginPacket); ok {
-					// Protocol 0x42ff - traditional user login
-					log.Printf("[Protocol] User login packet (0x42ff) in Bishop session %s", clientAddr)
-					response := h.handleUserLogin(p, clientAddr)
-					if response != nil {
-						conn.Write(response)
-					}
-				} else if p, ok := packet.(*GameLoginPacket); ok {
-					// Protocol 0xe0ff - player identity verification (matches JavaScript implementation)
-					log.Printf("[Protocol] Player identity verification packet (0xe0ff) in Bishop session %s", clientAddr)
-					response := h.handlePlayerIdentityVerification(p, clientAddr)
-					if response != nil {
-						conn.Write(response)
+				// 229-byte packet during Bishop session - this is ProcessVerifyReplyFromPaysys request
+				log.Printf("[Protocol] Bishop ProcessVerifyReplyFromPaysys request detected (%d bytes)", n)
+				
+				// Check if this is the hybrid protocol format first
+				if len(data) >= 32 && bytes.Equal(data[0:16], data[16:32]) {
+					// Hybrid format: first 32 bytes = XOR key repeated, then plain text data
+					log.Printf("[Protocol] Hybrid protocol format detected - extracting login from plain text")
+					xorKeyHeader := data[0:16]
+					loginData := data[32:]
+					
+					log.Printf("[Protocol] XOR key header: %x", xorKeyHeader)
+					log.Printf("[Protocol] Login data: %x", loginData)
+					log.Printf("[Protocol] Login data as text: %q", string(loginData))
+					
+					// Parse username and password from plain text data
+					username, password, err := ParseLoginDataFast(loginData)
+					if err != nil {
+						log.Printf("[Protocol] Failed to parse hybrid login data: %v", err)
+						// Send failure response
+						failResponse := CreateBishopVerifyResponse(3, "Parse error")
+						conn.Write(failResponse)
+					} else {
+						log.Printf("[Protocol] Hybrid format - Username: %s, Password: %s", username, password)
+						
+						// Perform actual authentication
+						authSuccess := h.authenticateUser(username, password, clientAddr)
+						if authSuccess {
+							log.Printf("[Protocol] Authentication successful for %s", username)
+							successResponse := CreateBishopVerifyResponse(0, "Login successful")
+							_, err := conn.Write(successResponse)
+							if err != nil {
+								log.Printf("[Protocol] Failed to send Bishop success response: %v", err)
+							} else {
+								log.Printf("[Protocol] Bishop ProcessVerifyReplyFromPaysys response sent successfully")
+							}
+						} else {
+							log.Printf("[Protocol] Authentication failed for %s", username)
+							failResponse := CreateBishopVerifyResponse(3, "Authentication failed")
+							conn.Write(failResponse)
+						}
 					}
 				} else {
-					log.Printf("[Protocol] Failed to cast 229-byte packet to known type in Bishop session")
-					ackResponse := []byte{0x04, 0x00, 0x01, 0x00} // 4-byte ACK packet
-					conn.Write(ackResponse)
+					// Standard encrypted format - handle normally
+					packet, err := ParsePacket(data)
+					if err != nil {
+						log.Printf("[Protocol] Error parsing 229-byte packet in Bishop session: %v", err)
+						failResponse := CreateBishopVerifyResponse(2, "Parse error")
+						conn.Write(failResponse)
+					} else if p, ok := packet.(*UserLoginPacket); ok {
+						// Protocol 0x42ff - traditional user login
+						log.Printf("[Protocol] User login packet (0x42ff) in Bishop session %s", clientAddr)
+						response := h.handleUserLoginForBishop(p, clientAddr)
+						if response != nil {
+							conn.Write(response)
+						}
+					} else if p, ok := packet.(*GameLoginPacket); ok {
+						// Protocol 0xe0ff - player identity verification (matches JavaScript implementation)
+						log.Printf("[Protocol] Player identity verification packet (0xe0ff) in Bishop session %s", clientAddr)
+						response := h.handlePlayerIdentityVerification(p, clientAddr)
+						if response != nil {
+							conn.Write(response)
+						}
+					} else {
+						log.Printf("[Protocol] Failed to cast 229-byte packet to known type in Bishop session")
+						failResponse := CreateBishopVerifyResponse(2, "Unknown packet type")
+						conn.Write(failResponse)
+					}
 				}
 			} else if n == 47 {
 				// Session confirmation packet (0x14ff) - comes after player identity verification
@@ -1005,4 +1048,98 @@ func isValidCharacterName(name string) bool {
 	}
 	
 	return true
+}
+
+// authenticateUser performs actual user authentication
+func (h *Handler) authenticateUser(username, password, clientAddr string) bool {
+	// If we have a database, verify credentials
+	if h.db != nil {
+		// Database operations with timeout
+		dbDone := make(chan struct {
+			isValid bool
+			err     error
+		}, 1)
+		
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[Protocol] Recovered from database panic: %v", r)
+					dbDone <- struct {
+						isValid bool
+						err     error
+					}{false, fmt.Errorf("database panic: %v", r)}
+				}
+			}()
+			
+			isValid, err := h.db.AccountLogin(username, password)
+			dbDone <- struct {
+				isValid bool
+				err     error
+			}{isValid, err}
+		}()
+		
+		// Wait for database operations or timeout (quick for Bishop)
+		select {
+		case dbResult := <-dbDone:
+			if dbResult.err != nil {
+				log.Printf("[Protocol] Database error for %s: %v", username, dbResult.err)
+				return false
+			}
+			if !dbResult.isValid {
+				log.Printf("[Protocol] Invalid credentials for %s", username)
+				return false
+			}
+			
+			// Check account locked state
+			lockedState, err := h.db.GetAccountState(username)
+			if err != nil {
+				log.Printf("[Protocol] Failed to check account state for %s: %v", username, err)
+				return false
+			}
+			if lockedState != 0 {
+				log.Printf("[Protocol] Account %s is locked", username)
+				return false
+			}
+			
+			return true
+		case <-time.After(2 * time.Second):
+			log.Printf("[Protocol] Database operation timeout for %s", username)
+			return false
+		}
+	} else {
+		// No database mode - accept all logins for testing
+		log.Printf("[Protocol] No database mode - accepting login for %s", username)
+		return true
+	}
+}
+
+// handleUserLoginForBishop handles user login specifically in Bishop session context
+func (h *Handler) handleUserLoginForBishop(packet *UserLoginPacket, clientAddr string) []byte {
+	log.Printf("[Protocol] Bishop user login from %s", clientAddr)
+	log.Printf("[Protocol] Encrypted data (%d bytes): %x", len(packet.EncryptedData), packet.EncryptedData)
+	
+	// Quick decryption for Bishop context
+	decryptedData := DecryptXORFast(packet.EncryptedData, clientAddr)
+	if decryptedData == nil {
+		log.Printf("[Protocol] Fast decryption failed for Bishop login")
+		return CreateBishopVerifyResponse(2, "Decryption failed")
+	}
+	
+	// Parse username and password
+	username, password, err := ParseLoginDataFast(decryptedData)
+	if err != nil {
+		log.Printf("[Protocol] Fast parsing failed for Bishop login: %v", err)
+		return CreateBishopVerifyResponse(2, "Parse error")
+	}
+	
+	log.Printf("[Protocol] Bishop login - Username: %s, Password: %s", username, password)
+	
+	// Authenticate
+	if h.authenticateUser(username, password, clientAddr) {
+		log.Printf("[Protocol] Bishop authentication successful for %s", username)
+		return CreateBishopVerifyResponse(0, "Login successful")
+	} else {
+		log.Printf("[Protocol] Bishop authentication failed for %s", username)
+		return CreateBishopVerifyResponse(3, "Authentication failed")
+	}
 }

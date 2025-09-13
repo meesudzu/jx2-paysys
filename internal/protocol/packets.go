@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"log"
 )
 
 // PacketType represents different packet types
@@ -688,4 +689,36 @@ func parseSessionConfirm2Packet(data []byte) (*SessionConfirm2Packet, error) {
 	copy(packet.EncryptedData, data[4:])
 
 	return packet, nil
+}
+
+// CreateBishopVerifyResponse creates a proper Bishop verification response for ProcessVerifyReplyFromPaysys
+func CreateBishopVerifyResponse(result uint8, message string) []byte {
+	// Based on the PCAP analysis, Bishop expects a specific format
+	// The original server sent 169 bytes with protocol 0x0eff, but this caused timeout
+	// Let's create a proper response that Bishop will recognize and not timeout on
+	
+	log.Printf("[Protocol] Creating Bishop verify response: result=%d, message=%s", result, message)
+	
+	// Option 1: Try a simple, small response format that should complete quickly
+	if result == 0 {
+		// Success response - send a compact success message
+		response := []byte{
+			0x08, 0x00,      // Size: 8 bytes
+			0x38, 0xff,      // Response protocol 0xff38 (response to 0x38ff request)
+			result,          // Result code (0 = success)
+			0x00, 0x00, 0x00, // Padding
+		}
+		log.Printf("[Protocol] Bishop success response: %d bytes, protocol 0x%04x", len(response), 0xff38)
+		return response
+	} else {
+		// Error response - also keep it simple
+		response := []byte{
+			0x09, 0x00,      // Size: 9 bytes  
+			0x38, 0xff,      // Response protocol 0xff38
+			result,          // Result code (non-zero = error)
+			0x45, 0x52, 0x52, 0x00, // "ERR\0"
+		}
+		log.Printf("[Protocol] Bishop error response: %d bytes, protocol 0x%04x", len(response), 0xff38)
+		return response
+	}
 }
